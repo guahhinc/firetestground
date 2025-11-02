@@ -5,44 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Fire</title>
     
-    <!-- 
-    ============================================================================
-    === PWA / ADD TO HOME SCREEN CONFIGURATION FOR iOS & ANDROID ===
-    ============================================================================
-    
-    CRITICAL INSTRUCTIONS FOR IPHONE:
-    1. HOST THIS FILE ON A SECURE (https://) SERVER. It will NOT work from a local file or http://.
-    2. Open the https:// URL in the SAFARI browser on your iPhone.
-    3. Tap the "Share" button (the square with an arrow pointing up).
-    4. Scroll down and tap "Add to Home Screen".
-    5. Confirm the name and tap "Add".
-    
-    The app will now be on your home screen and will open in full-screen mode.
-    
-    ============================================================================
-    -->
-
-    <!-- iOS Specific Meta Tags -->
+    <!-- === MODIFIED: Simplified iOS Meta Tags based on working example === -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta id="status-bar-meta" name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Fire">
     <link rel="apple-touch-icon" href="https://i.imgur.com/28xRzso.png">
-
-    <!-- General PWA Meta Tags -->
-    <meta id="theme-color-meta" name="theme-color" content="#ffffff">
-    <link rel="manifest" href="data:application/manifest+json,{
-        &quot;name&quot;: &quot;Fire&quot;,
-        &quot;short_name&quot;: &quot;Fire&quot;,
-        &quot;start_url&quot;: &quot;./&quot;,
-        &quot;display&quot;: &quot;standalone&quot;,
-        &quot;background_color&quot;: &quot;#000000&quot;,
-        &quot;theme_color&quot;: &quot;#FF5722&quot;,
-        &quot;icons&quot;: [{
-            &quot;src&quot;: &quot;https://i.imgur.com/28xRzso.png&quot;,
-            &quot;sizes&quot;: &quot;192x192&quot;,
-            &quot;type&quot;: &quot;image/png&quot;
-        }]
-    }">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,12 +17,17 @@
     <style>
         :root {
             --primary-bg-color: #ffffff; --secondary-bg-color: #fafafa; --primary-text-color: #1c1c1e;
-            --secondary-text-color: #8A8A8E; --border-color: #EAEAEA; --accent-color: #FF5722; --error-color: #ed4956;
+            --secondary-text-color: #8A8A8E; --border-color: #EAEAEA; 
+            /* === MODIFIED: New accent color === */
+            --accent-color: #fe5721; 
+            --error-color: #ed4956;
             --warning-color: #FFC107;
         }
         [data-theme="dark"] {
             --primary-bg-color: #000000; --secondary-bg-color: #121212; --primary-text-color: #F5F5F7;
-            --secondary-text-color: #8D8D92; --border-color: #2D2D2F; --accent-color: #FF8A65;
+            --secondary-text-color: #8D8D92; --border-color: #2D2D2F; 
+            /* === MODIFIED: Lighter shade of new accent for dark mode === */
+            --accent-color: #ff8a64;
             --shadow-color: rgba(255, 255, 255, 0.1);
             --warning-color: #FFD54F;
         }
@@ -66,7 +38,7 @@
         }
         
         body.logged-in {
-            padding-top: 50px; 
+            padding-top: calc(50px + env(safe-area-inset-top)); 
         }
 
         .view { display: none; }
@@ -100,10 +72,12 @@
 
         /* --- Main App Header --- */
         header { 
-            display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; 
+            display: flex; justify-content: space-between; align-items: center; 
             border-bottom: 1px solid var(--border-color); 
             position: fixed; top: 0; left: 0; right: 0;
             background-color: var(--primary-bg-color); z-index: 10; height: 50px; 
+            padding: 8px 16px;
+            padding-top: calc(8px + env(safe-area-inset-top));
         }
         .header-actions { display: flex; align-items: center; gap: 20px; }
         .header-icon { font-size: 24px; cursor: pointer; }
@@ -666,9 +640,6 @@
                         const newTheme = e.target.checked ? 'dark' : 'light'; 
                         document.documentElement.setAttribute('data-theme', newTheme); 
                         localStorage.setItem('theme', newTheme);
-                        // --- MODIFIED --- Update meta tags for theme change
-                        document.getElementById('status-bar-meta').setAttribute('content', newTheme === 'dark' ? 'black-translucent' : 'default');
-                        document.getElementById('theme-color-meta').setAttribute('content', newTheme === 'dark' ? '#000000' : '#ffffff');
                     });
                     document.getElementById('back-to-profile-btn').addEventListener('click', () => { core.navigateTo('profile'); });
                     document.getElementById('search-input').addEventListener('input', (e) => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => handlers.search(e.target.value), 300); });
@@ -750,9 +721,6 @@
                     const savedTheme = localStorage.getItem('theme') || 'light'; 
                     document.documentElement.setAttribute('data-theme', savedTheme); 
                     document.getElementById('theme-switch').checked = savedTheme === 'dark';
-                    // --- MODIFIED --- Set initial meta tags based on saved theme
-                    document.getElementById('status-bar-meta').setAttribute('content', savedTheme === 'dark' ? 'black-translucent' : 'default');
-                    document.getElementById('theme-color-meta').setAttribute('content', savedTheme === 'dark' ? '#000000' : '#ffffff');
                     
                     if (localStorage.getItem('currentUser')) { 
                         core.initializeApp(); 
