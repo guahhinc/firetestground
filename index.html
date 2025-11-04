@@ -38,7 +38,6 @@
             --secondary-text-color: #8D8D92;
             --border-color: #2D2D2F;
             --accent-color: #fe5721;
-            --shadow-color: rgba(255, 255, 255, 0.1);
             --warning-color: #FFD54F;
             --button-hover-bg-color: #e04f1c;
             --button-secondary-bg-color: #2a2a2a;
@@ -59,6 +58,7 @@
         .container { max-width: 600px; margin: 0 auto; padding: 0 16px; }
         .hidden { display: none !important; }
 
+        button { font-weight: 600; cursor: pointer; border-radius: 10px; border: none; box-shadow: none; }
         button { font-weight: 600; cursor: pointer; border-radius: 10px; border: none; box-shadow: 0 2px 5px var(--shadow-color); }
         button.primary { background-color: var(--accent-color); color: white; transition: opacity 0.2s; }
         button.primary:hover:not(:disabled) { opacity: 0.85; }
