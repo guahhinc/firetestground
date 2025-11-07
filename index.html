@@ -11,6 +11,8 @@
     <meta name="apple-mobile-web-app-title" content="Fire">
     <link rel="apple-touch-icon" href="https://avatars.githubusercontent.com/u/208152170?v=4">
     
+    <link rel="icon" href="https://avatars.githubusercontent.com/u/208152170?v=4" type="image/png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600;700&display=swap" rel="stylesheet">
@@ -59,7 +61,6 @@
         .hidden { display: none !important; }
 
         button { font-weight: 600; cursor: pointer; border-radius: 10px; border: none; box-shadow: none; }
-        button { font-weight: 600; cursor: pointer; border-radius: 10px; border: none; box-shadow: 0 2px 5px var(--shadow-color); }
         button.primary { background-color: var(--accent-color); color: white; transition: opacity 0.2s; }
         button.primary:hover:not(:disabled) { opacity: 0.85; }
         button.secondary { background-color: var(--border-color); color: var(--primary-text-color); }
@@ -69,8 +70,6 @@
         .pfp { border-radius: 50%; object-fit: cover; background-color: var(--border-color); cursor: pointer; }
         .pfp-sm { width: 36px; height: 36px; }
         .pfp-lg { width: 80px; height: 80px; }
-        .delete-btn { background: none; color: var(--secondary-text-color); font-size: 20px; padding: 0 5px; cursor: pointer; opacity: 0.6; }
-        .delete-btn:hover { opacity: 1; color: var(--error-color); }
         .hashtag-link { color: var(--accent-color); font-weight: normal; text-decoration: none; }
         .hashtag-link:hover { text-decoration: underline; }
         
@@ -107,7 +106,7 @@
         }
         .header-actions { display: flex; align-items: center; gap: 20px; }
         .header-icon { font-size: 24px; cursor: pointer; position: relative; }
-        #notification-dot {
+        #notification-dot, #message-dot {
             position: absolute; top: -2px; right: -4px; width: 10px; height: 10px;
             background-color: var(--error-color); border-radius: 50%;
             border: 2px solid var(--primary-bg-color); display: none;
@@ -127,9 +126,7 @@
             line-height: 1.4;
             transition: transform 0.3s ease-in-out;
         }
-        #global-banner.hidden {
-            transform: translateY(-100%);
-        }
+        #global-banner.hidden { transform: translateY(-100%); }
         
         #create-post-form { 
             padding: 16px; margin: 0 0 20px 0; border: 1px solid var(--border-color); 
@@ -148,7 +145,7 @@
         #remove-image-btn { position: absolute; top: 8px; right: 8px; background-color: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 18px; line-height: 24px; text-align: center; cursor: pointer; padding: 0; font-weight: bold; }
         
         .post { border: 1px solid var(--border-color); border-radius: 12px; margin: 20px 0; background-color: var(--secondary-bg-color); box-shadow: none; overflow: hidden; }
-        .post-header { display: flex; align-items: center; padding: 12px 16px; gap: 12px; cursor: pointer; }
+        .post-header { display: flex; align-items: center; padding: 12px 16px; gap: 12px; cursor: pointer; position: relative; }
         .post-header-info { flex-grow: 1; }
         .post-display-name { font-weight: 600; font-size: 16px; display: inline-flex; align-items: center; }
         .post-timestamp { font-size: 14px; color: var(--secondary-text-color); margin-left: 8px; font-weight: 400; }
@@ -166,9 +163,24 @@
         .comment-form input { flex-grow: 1; border: none; padding: 8px; background-color: transparent; color: var(--primary-text-color); font-size: 14px; }
         .comment-form button { border: none; background: none; color: var(--accent-color); font-weight: 600; }
 
+        .post-options { position: relative; margin-left: auto; }
+        .options-btn { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .options-btn:hover { background-color: var(--border-color); color: var(--primary-text-color); }
+        .options-menu { position: absolute; top: 100%; right: 0; background-color: var(--secondary-bg-color); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 12px var(--shadow-color); z-index: 10; width: 150px; overflow: hidden; display: flex; flex-direction: column; }
+        .options-menu button {
+            background: none; border: none; box-shadow: none;
+            text-align: left; padding: 10px 15px; width: 100%;
+            border-radius: 0; font-size: 14px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--primary-text-color);
+        }
+        .options-menu button:last-child { border-bottom: none; }
+        .options-menu button:hover { background-color: var(--border-color); }
+        .options-menu .delete-btn { color: var(--error-color); font-weight: 700; }
+
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: flex-start; padding-top: 10vh; z-index: 1000; backdrop-filter: blur(4px); }
         .modal-content { background: var(--secondary-bg-color); padding: 20px; border-radius: 16px; width: 90%; max-width: 400px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .modal-header h2 { margin: 0; font-weight: 700; }
         .close-modal-btn { font-size: 24px; cursor: pointer; border: none; background: none; color: var(--primary-text-color); }
         .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--border-color); }
@@ -237,6 +249,138 @@
             margin-top: 4px;
             padding-right: 15px;
         }
+
+        .settings-section + .settings-section {
+            border-top: 1px solid var(--border-color);
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        .settings-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin: 0 0 10px 0;
+        }
+        #settings-modal .settings-section .setting-row:last-of-type {
+            border-bottom: none;
+        }
+
+        .form-group-tos { display: flex; align-items: flex-start; text-align: left; font-size: 13px; margin-bottom: 16px; color: var(--secondary-text-color); cursor: pointer; line-height: 1.4; }
+        .form-group-tos input[type="checkbox"] { display: none; }
+        .tos-checkmark { height: 22px; width: 22px; background-color: transparent; border: 2px solid var(--border-color); border-radius: 6px; margin-right: 12px; flex-shrink: 0; position: relative; top: 1px; transition: background-color 0.2s, border-color 0.2s; }
+        .form-group-tos input:checked + .tos-checkmark { background-color: var(--accent-color); border-color: var(--accent-color); }
+        .tos-checkmark:after { content: ""; position: absolute; display: none; left: 6px; top: 1px; width: 6px; height: 12px; border: solid white; border-width: 0 3px 3px 0; transform: rotate(45deg); }
+        .form-group-tos input:checked + .tos-checkmark:after { display: block; }
+        .form-group-tos .tos-text { font-weight: 400; }
+
+        #messages-view .container { max-width: 900px; padding: 20px 0 0 0; }
+        .messages-container {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            height: calc(100vh - 120px);
+            max-height: 700px;
+            background-color: var(--secondary-bg-color);
+            position: relative;
+            overflow: hidden;
+        }
+        #conversations-list, #conversation-view {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.3s ease-in-out;
+            background-color: var(--secondary-bg-color);
+        }
+        #conversations-list {
+            transform: translateX(0);
+            overflow-y: auto;
+            z-index: 2;
+        }
+        #conversation-view {
+            transform: translateX(100%);
+            display: flex;
+            flex-direction: column;
+            z-index: 1;
+        }
+        .messages-container.show-chat-view #conversations-list {
+            transform: translateX(-100%);
+        }
+        .messages-container.show-chat-view #conversation-view {
+            transform: translateX(0);
+        }
+
+        @media (min-width: 768px) {
+            #messages-view .container { padding: 20px 16px 0 16px; }
+            .messages-container { display: flex; position: static; }
+            #conversations-list, #conversation-view {
+                position: static;
+                transform: none !important;
+                height: auto;
+            }
+            #conversations-list { width: 35%; min-width: 280px; border-right: 1px solid var(--border-color); }
+            #conversation-view { flex-grow: 1; }
+            #back-to-convos-btn { display: none !important; }
+        }
+
+        .conversation-item { display: flex; align-items: center; padding: 12px; gap: 12px; cursor: pointer; border-bottom: 1px solid var(--border-color); position: relative; }
+        .conversation-item:last-child { border-bottom: none; }
+        .conversation-item:hover { background-color: var(--border-color); }
+        .conversation-item.active { background-color: var(--accent-color); color: white; }
+        .conversation-item.active .convo-details .username, .conversation-item.active .convo-details .last-message { color: #f0f0f0; }
+        .convo-details { flex-grow: 1; overflow: hidden; }
+        .convo-details .username { font-weight: 600; font-size: 15px; }
+        .convo-details .last-message { font-size: 13px; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .unread-dot { width: 10px; height: 10px; background-color: var(--accent-color); border-radius: 50%; margin-left: auto; flex-shrink: 0; }
+        .conversation-item.active .unread-dot { background-color: white; }
+        
+        #conversation-header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border-color); font-weight: 600; }
+        #conversation-header a { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px; flex-grow: 1; }
+        #back-to-convos-btn { display: block; background: none; border: none; cursor: pointer; padding: 5px; margin-right: 10px; color: var(--primary-text-color); }
+
+        #messages-list { flex-grow: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+        .message-wrapper { display: flex; flex-direction: column; }
+        .message-wrapper.sent { align-items: flex-end; }
+        .message-wrapper.received { align-items: flex-start; }
+        
+        /* MODIFIED: Add flex row for sent messages to align options menu */
+        .message-wrapper.sent {
+            flex-direction: row;
+            justify-content: flex-end;
+            align-items: center;
+            position: relative; /* For menu positioning */
+        }
+        
+        .message-bubble { max-width: 80%; padding: 8px 12px; border-radius: 18px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+        .message-bubble.sent { background-color: var(--accent-color); color: white; border-bottom-right-radius: 4px; }
+        .message-bubble.received { background-color: var(--border-color); color: var(--primary-text-color); border-bottom-left-radius: 4px; }
+        .message-status { font-size: 11px; color: var(--secondary-text-color); padding: 2px 8px 0 0; text-align: right; width: 100%;}
+        .message-status.error { color: var(--error-color); font-weight: 600; }
+        
+        #message-input-form { display: flex; padding: 10px; border-top: 1px solid var(--border-color); }
+        #message-input-form input { flex-grow: 1; border: none; padding: 10px; border-radius: 20px; background-color: var(--border-color); color: var(--primary-text-color); font-size: 15px; margin-right: 10px; }
+        #message-input-form button { padding: 0 16px; font-size: 15px; }
+        #conversation-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--secondary-text-color); text-align: center; }
+        #conversation-placeholder .material-symbols-rounded { font-size: 60px; margin-bottom: 16px; }
+
+        /* NEW: Styles for message options menu */
+        .message-options {
+            position: relative;
+            margin-left: 4px;
+        }
+        .message-options .options-btn {
+            padding: 2px;
+        }
+        .message-options .options-btn .material-symbols-rounded {
+            font-size: 18px;
+            vertical-align: -4px;
+        }
+        .message-options .options-menu {
+            width: 120px; /* Smaller menu */
+            top: 50%;
+            right: 100%;
+            transform: translateY(-50%);
+            margin-right: 8px;
+        }
     </style>
 </head>
 <body>
@@ -246,6 +390,10 @@
         <div class="header-actions">
             <div class="header-icon" id="home-btn"><span class="material-symbols-rounded">home</span></div>
             <div class="header-icon" id="search-btn"><span class="material-symbols-rounded">search</span></div>
+            <div class="header-icon" id="messages-btn">
+                <span class="material-symbols-rounded">mail</span>
+                <span id="message-dot"></span>
+            </div>
             <div class="header-icon" id="notifications-btn">
                 <span class="material-symbols-rounded">notifications</span>
                 <span id="notification-dot"></span>
@@ -257,14 +405,28 @@
     <div id="global-banner" class="hidden"></div>
 
     <div id="auth-view" class="view">
-        <div class="container"><h1 class="logo" style="font-size: 36px;">Fire</h1><div id="auth-container"><div id="login-form"><input type="text" id="login-username" placeholder="Username" autocomplete="username"><input type="password" id="login-password" placeholder="Password" autocomplete="current-password"><button id="login-btn" class="primary">Log In</button><p id="login-error" class="error-message hidden"></p><p>Don't have an account? <a id="show-register-link">Sign up</a></p></div><div id="register-form" class="hidden"><input type="text" id="register-username" placeholder="Username (no spaces)" autocomplete="username"><input type="text" id="register-displayname" placeholder="Display Name"><input type="password" id="register-password" placeholder="Password" autocomplete="new-password"><button id="register-btn" class="primary">Sign Up</button><p id="register-error" class="error-message hidden"></p><p>Have an account? <a id="show-login-link">Log in</a></p></div></div></div>
+        <div class="container"><h1 class="logo" style="font-size: 36px;">Fire</h1><div id="auth-container"><div id="login-form"><input type="text" id="login-username" placeholder="Username" autocomplete="username"><input type="password" id="login-password" placeholder="Password" autocomplete="current-password"><button id="login-btn" class="primary">Log In</button><p id="login-error" class="error-message hidden"></p><p>Don't have an account? <a id="show-register-link">Sign up</a></p></div><div id="register-form" class="hidden"><input type="text" id="register-username" placeholder="Username (no spaces)" autocomplete="username"><input type="text" id="register-displayname" placeholder="Display Name"><input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
+        <label class="form-group-tos">
+            <input type="checkbox" id="register-tos">
+            <span class="tos-checkmark"></span>
+            <span class="tos-text">I agree to the <a href="https://sites.google.com/view/guahh/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service and Privacy Policy</a>.</span>
+        </label>
+        <button id="register-btn" class="primary" disabled>Sign Up</button><p id="register-error" class="error-message hidden"></p><p>Have an account? <a id="show-login-link">Log in</a></p></div></div></div>
     </div>
 
     <div id="suspended-view" class="view">
         <div class="container">
-            <span class="material-symbols-rounded warning-icon">warning</span>
-            <h2>Account Suspended</h2>
-            <p>Contact guahhinc@outlook.com for more info and/or to appeal.</p>
+            <span class="material-symbols-rounded warning-icon" style="font-size: 52px;">warning</span>
+            <h2>Account Banned</h2>
+            <div id="ban-details-container" style="max-width: 400px; margin: 20px auto; line-height: 1.6; text-align: left;">
+                <p style="text-align: center; margin-bottom: 20px;">Contact guahhinc@outlook.com for more info or appeal.</p>
+                <p style="font-weight: 600; text-align: center;">Reason:</p>
+                <p id="ban-reason" style="margin-top: 5px; background-color: var(--border-color); padding: 12px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; text-align: center;"></p>
+                <div id="ban-timer-container">
+                    <p style="margin-top: 20px; font-weight: 600; text-align: center;">Time remaining:</p>
+                    <p id="ban-countdown" style="font-size: 1.2em; font-weight: 700; margin-top: 5px; text-align: center;"></p>
+                </div>
+            </div>
             <button id="suspended-logout-btn" class="secondary">Log Out</button>
         </div>
     </div>
@@ -319,33 +481,63 @@
         <div class="container"><a class="back-btn" id="back-to-profile-btn">&larr; Back to Profile</a><h2>Edit Profile</h2><div class="form-group"><label for="edit-pfp-url">Profile Picture URL</label><input type="url" id="edit-pfp-url" placeholder="https://example.com/image.png"></div><div class="form-group"><label for="edit-display-name">Display Name</label><input type="text" id="edit-display-name"></div><div class="form-group"><label for="edit-description">Description</label><textarea id="edit-description"></textarea></div><div class="actions"><button id="save-profile-btn" class="primary">Save Changes</button></div><p id="edit-profile-error" class="error-message hidden"></p></div>
     </div>
 
-    <!-- Modals -->
+    <div id="messages-view" class="view">
+        <div class="container">
+            <div class="messages-container">
+                <div id="conversations-list"></div>
+                <div id="conversation-view">
+                    <div id="conversation-placeholder">
+                        <span class="material-symbols-rounded">chat</span>
+                        <h3>Your Messages</h3>
+                        <p>Select a conversation to start chatting.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Settings</h2><button class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
             </div>
-            <div class="setting-row" id="settings-user-info-row"></div>
-            <div class="setting-row">
-                <div>
-                    <span>Who can see your posts</span>
-                    <p class="setting-description">Control which people can see your posts and stories</p>
+            <div class="settings-section">
+                <h4 class="settings-section-title">👤 Account</h4>
+                <div class="setting-row" id="settings-user-info-row"></div>
+                <div class="setting-row">
+                    <button id="logout-btn">Log Out</button>
                 </div>
-                <select id="post-visibility-select" style="padding: 5px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--primary-bg-color); color: var(--primary-text-color);">
-                    <option value="Everyone">Everyone</option>
-                    <option value="Followers">Followers</option>
-                    <option value="Friends">Friends</option>
-                </select>
             </div>
-            <div class="setting-row">
-                <div>
-                    <span>Dark Mode</span>
-                    <p class="setting-description">Change the website theme</p>
+            <div class="settings-section">
+                <h4 class="settings-section-title">🔒 Privacy</h4>
+                <div class="setting-row">
+                    <div>
+                        <span>Private Profile</span>
+                        <p class="setting-description">Only friends can see your full profile.</p>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="privacy-switch"><span class="slider"></span></label>
                 </div>
-                <label class="switch"><input type="checkbox" id="theme-switch"><span class="slider"></span></label>
+                <div class="setting-row">
+                    <div>
+                        <span>Who can see your posts</span>
+                        <p class="setting-description">Control who can see your posts and stories.</p>
+                    </div>
+                    <select id="post-visibility-select" style="padding: 5px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--primary-bg-color); color: var(--primary-text-color);">
+                        <option value="Everyone">Everyone</option>
+                        <option value="Followers">Followers</option>
+                        <option value="Friends">Friends</option>
+                    </select>
+                </div>
             </div>
-            <div class="setting-row">
-                <button id="logout-btn">Log Out</button>
+            <div class="settings-section">
+                <h4 class="settings-section-title">🎨 Customisation</h4>
+                <div class="setting-row">
+                    <div>
+                        <span>Dark Mode</span>
+                        <p class="setting-description">Change the website theme.</p>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="theme-switch"><span class="slider"></span></label>
+                </div>
             </div>
         </div>
     </div>
@@ -379,26 +571,24 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // ===== THIS LINE IS NOW UPDATED WITH YOUR NEW URL =====
-            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzhIL3arTSuXv0vBp_fRTYsOsvjRlGiKjm5Dg21oh2yRDbPyk_ORK4u7vZQieHV19Y2/exec'; 
+            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGDi-wW8rp2Ikk_U4mSHA1wx7V891bP2d0T4m8GUiryDw_nGJgi0V4f3ZqzQmqlkCL/exec';
 
+            // REVERTED state object
             const state = { 
-                currentUser: null, 
-                posts: [], 
-                currentUserFollowingList: [], 
-                currentUserFollowersList: [],
-                notifications: [],
-                unreadNotificationCount: 0,
-                currentView: null, 
-                profileUser: null,
-                backgroundPosts: null,
-                backgroundRefreshIntervalId: null,
-                storyUpdateIntervalId: null,
-                feedScrollPosition: 0,
-                postImageUrl: null,
-                scrollToPostId: null
+                currentUser: null, posts: [], currentUserFollowingList: [], currentUserFollowersList: [],
+                notifications: [], unreadNotificationCount: 0, currentView: null, profileUser: null,
+                backgroundPosts: null, backgroundRefreshIntervalId: null, storyUpdateIntervalId: null,
+                feedScrollPosition: 0, postImageUrl: null, editingPostId: null, banCountdownIntervalId: null,
+                scrollToPostId: null, conversations: [],
+                currentConversation: { otherUserId: null, messages: [] }, messagePollingIntervalId: null,
             };
-            const views = { auth: document.getElementById('auth-view'), feed: document.getElementById('main-app-view'), profile: document.getElementById('profile-page-view'), editProfile: document.getElementById('edit-profile-view'), suspended: document.getElementById('suspended-view'), outage: document.getElementById('outage-view'), hashtagFeed: document.getElementById('hashtag-feed-view') };
+            
+            const views = { 
+                auth: document.getElementById('auth-view'), feed: document.getElementById('main-app-view'), 
+                profile: document.getElementById('profile-page-view'), editProfile: document.getElementById('edit-profile-view'), 
+                suspended: document.getElementById('suspended-view'), outage: document.getElementById('outage-view'), 
+                hashtagFeed: document.getElementById('hashtag-feed-view'), messages: document.getElementById('messages-view')
+            };
             const modals = { settings: document.getElementById('settings-modal'), search: document.getElementById('search-modal'), notifications: document.getElementById('notifications-modal'), imageUrl: document.getElementById('image-url-modal') };
             const VERIFIED_SVG = `<span class="material-symbols-rounded" style="color: #1DA1F2; vertical-align: -4px; margin-left: 5px;">verified</span>`;
 
@@ -416,7 +606,11 @@
                         const response = await fetch(url, options);
                         if (!response.ok) throw new Error(`Network error: ${response.status}`);
                         const result = await response.json();
-                        if (result.status === 'error') throw new Error(result.message);
+                        if (result.status === 'error') {
+                            const error = new Error(result.message);
+                            if (result.banDetails) error.banDetails = result.banDetails;
+                            throw error;
+                        }
                         return result;
                     } catch (error) { console.error(`API Call failed for action "${action}":`, error); throw error; }
                 }
@@ -425,20 +619,51 @@
             const ui = {
                 render() {
                     const header = document.querySelector('header');
-                    const isUserLoggedIn = ['feed', 'profile', 'editProfile', 'hashtagFeed'].includes(state.currentView);
-                    
+                    const isUserLoggedIn = ['feed', 'profile', 'editProfile', 'hashtagFeed', 'messages'].includes(state.currentView);
                     header.classList.toggle('hidden', !isUserLoggedIn);
                     document.body.classList.toggle('logged-in', isUserLoggedIn);
-
                     Object.values(views).forEach(v => v.classList.remove('active'));
                     views[state.currentView]?.classList.add('active');
                     if (state.currentView === 'feed') this.renderFeed(state.posts, document.getElementById('feed'), true);
                     if (state.currentView === 'profile') this.renderProfilePage();
                     if (state.currentView === 'editProfile') this.renderEditProfilePage();
+                    if (state.currentView === 'messages') this.renderMessagesPage();
+                },
+                renderBanPage(banDetails) {
+                    if (state.banCountdownIntervalId) clearInterval(state.banCountdownIntervalId);
+                    const reasonEl = document.getElementById('ban-reason');
+                    const timerContainer = document.getElementById('ban-timer-container');
+                    const countdownEl = document.getElementById('ban-countdown');
+                    reasonEl.textContent = banDetails.reason || 'No reason provided.';
+                    if (banDetails.endDate === 'permanent') {
+                        timerContainer.classList.add('hidden');
+                        return;
+                    }
+                    timerContainer.classList.remove('hidden');
+                    const endDate = new Date(banDetails.endDate);
+                    const updateCountdown = () => {
+                        const now = new Date();
+                        const diff = endDate - now;
+                        if (diff <= 0) {
+                            countdownEl.textContent = 'Your ban has expired. You can now log out and log back in.';
+                            clearInterval(state.banCountdownIntervalId);
+                            state.banCountdownIntervalId = null;
+                            return;
+                        }
+                        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        let countdownText = '';
+                        if (days > 0) countdownText += `${days}d `;
+                        if (hours > 0 || days > 0) countdownText += `${hours}h `;
+                        countdownText += `${minutes}m`;
+                        countdownEl.textContent = countdownText.trim();
+                    };
+                    updateCountdown();
+                    state.banCountdownIntervalId = setInterval(updateCountdown, 1000);
                 },
                 renderFeed(posts, container, isMainFeed = false) {
                     const validPosts = posts.filter(p => !p.isStory || new Date() < new Date(p.expiryTimestamp));
-                    
                     if (!validPosts || validPosts.length === 0) {
                         container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">No posts to see here.</p>';
                         return;
@@ -447,15 +672,12 @@
                     if (isMainFeed) {
                         const now = new Date();
                         const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-                        
                         const stories = [];
                         const priorityPosts = [];
                         const otherPosts = [];
-
                         postsToRender.forEach(post => {
                             const isFollowed = state.currentUserFollowingList.includes(post.userId);
                             const isOwnPost = post.userId === state.currentUser.userId;
-                            
                             if (post.isStory && (isFollowed || isOwnPost)) {
                                 stories.push(post);
                             } else {
@@ -467,10 +689,8 @@
                                 }
                             }
                         });
-                        
                         stories.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
                         priorityPosts.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-
                         postsToRender = [...stories, ...priorityPosts, ...otherPosts];
                     }
                     container.innerHTML = '';
@@ -486,7 +706,7 @@
                                 <div class="display-name" style="color: var(--secondary-text-color);">${sanitizeHTML(state.profileUser.displayName)}</div>
                                 <div class="username" style="color: var(--secondary-text-color);">@${sanitizeHTML(state.profileUser.username)}</div>
                                 <div style="margin-top: 20px; padding: 12px; background-color: var(--border-color); border-radius: 12px; font-weight: 600;">
-                                    This account is suspended.
+                                    This account is currently banned.
                                 </div>
                             </div>`;
                         document.getElementById('profile-feed').innerHTML = '';
@@ -495,20 +715,45 @@
                     const isOwnProfile = state.currentUser?.userId === state.profileUser.userId;
                     const pfpUrl = sanitizeHTML(state.profileUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.profileUser.username}`;
                     
-                    let actionButton = '';
+                    let actionButtonHTML = '';
                     if (!isOwnProfile) {
                         const relationship = state.profileUser.relationship;
+                        let followButton = '';
+
                         if (relationship === 'Friends') {
-                            actionButton = `<button id="follow-btn" class="secondary">Friends</button>`;
+                            followButton = `<button id="follow-btn" class="secondary">Friends</button>`;
                         } else if (relationship === 'Following') {
-                            actionButton = `<button id="follow-btn" class="secondary">Unfollow</button>`;
+                            followButton = `<button id="follow-btn" class="secondary">Unfollow</button>`;
                         } else {
-                            actionButton = `<button id="follow-btn" class="primary">Follow</button>`;
+                            followButton = `<button id="follow-btn" class="primary">Follow</button>`;
+                        }
+                        
+                        actionButtonHTML = followButton;
+
+                        if (state.profileUser.profilePrivacy !== 'private' || relationship === 'Friends') {
+                            const messageButton = `<button id="message-user-btn" class="primary">Message</button>`;
+                            actionButtonHTML += ` ${messageButton}`;
                         }
                     } else {
-                        actionButton = `<button id="edit-profile-btn" class="secondary">Edit Profile</button>`;
+                        actionButtonHTML = `<button id="edit-profile-btn" class="secondary">Edit Profile</button>`;
                     }
 
+                    if (state.profileUser.profilePrivacy === 'private' && !isOwnProfile && state.profileUser.relationship !== 'Friends') {
+                        document.getElementById('profile-content').innerHTML = `
+                            <div class="profile-header">
+                                <img src="${pfpUrl}" class="pfp pfp-lg">
+                                <div class="display-name">${sanitizeHTML(state.profileUser.displayName)} ${String(state.profileUser.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</div>
+                                <div class="username">@${sanitizeHTML(state.profileUser.username)}</div>
+                                <div class="profile-actions" style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">${actionButtonHTML}</div>
+                                <div style="margin-top: 20px; padding: 12px; background-color: var(--border-color); border-radius: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span class="material-symbols-rounded" style="font-size: 20px; vertical-align: -4px;">lock</span>
+                                    This Account is Private
+                                </div>
+                                <p style="color: var(--secondary-text-color); margin-top: 10px;">Become friends with this user to see their posts and profile details.</p>
+                            </div>`;
+                        document.getElementById('profile-feed').innerHTML = '';
+                        return;
+                    }
                     document.getElementById('profile-content').innerHTML = `
                         <div class="profile-header">
                             <img src="${pfpUrl}" class="pfp pfp-lg">
@@ -519,11 +764,10 @@
                                 <div class="stat"><span>${state.profileUser.following}</span> Following</div>
                                 <div class="stat"><span>${state.profileUser.totalLikes || 0}</span> Likes</div>
                             </div>
-                            <p class="description">${sanitizeHTML(state.profileUser.description)}</p>
-                            <div class="profile-actions">${actionButton}</div>
+                            <p class="description">${sanitizeHTML(state.profileUser.description || '')}</p>
+                            <div class="profile-actions" style="display: flex; gap: 10px; justify-content: center;">${actionButtonHTML}</div>
                         </div>`;
                     this.renderFeed(state.posts.filter(p => p.userId === state.profileUser.userId), document.getElementById('profile-feed'), false);
-
                     if (state.scrollToPostId) {
                         const postIdToScroll = state.scrollToPostId;
                         setTimeout(() => {
@@ -533,7 +777,6 @@
                                 const warningColor = getComputedStyle(document.documentElement).getPropertyValue('--warning-color');
                                 postElement.style.transition = 'background-color 1s ease';
                                 postElement.style.backgroundColor = `${warningColor}4D`;
-                                
                                 setTimeout(() => {
                                     postElement.style.backgroundColor = '';
                                 }, 2500);
@@ -544,7 +787,22 @@
                 },
                 formatPostContent(content) {
                     if (!content) return '';
-                    return content.replace(/#(\w+)/g, '<a href="#" class="hashtag-link" data-hashtag="$1">#$1</a>');
+                    let inTag = false;
+                    let formattedContent = "";
+                    for(let i = 0; i < content.length; i++) {
+                        if(content[i] === '<') inTag = true;
+                        if(content[i] === '>') inTag = false;
+                        if(content[i] === '#' && !inTag && (i === 0 || /\s/.test(content[i-1]))) {
+                            let tag = content.substring(i+1).match(/^\w+/);
+                            if(tag) {
+                                formattedContent += `<a href="#" class="hashtag-link" data-hashtag="${tag[0]}">#${tag[0]}</a>`;
+                                i += tag[0].length;
+                                continue;
+                            }
+                        }
+                        formattedContent += content[i];
+                    }
+                    return formattedContent;
                 },
                 renderEditProfilePage() {
                     document.getElementById('edit-pfp-url').value = state.currentUser.profilePictureUrl;
@@ -559,6 +817,15 @@
                     const isLiked = post.likes.some(like => like.userId === state.currentUser.userId);
                     const isAuthor = post.userId === state.currentUser.userId;
                     const pfpUrl = sanitizeHTML(post.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${post.username}`;
+                    const optionsMenuHTML = `
+                        <div class="post-options">
+                            <button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button>
+                            <div class="options-menu hidden">
+                                <button class="edit-btn" data-action="edit-post">Edit Post</button>
+                                <button class="delete-btn" data-action="delete-post">Delete Post</button>
+                            </div>
+                        </div>
+                    `;
                     postDiv.innerHTML = `
                         <div class="post-header">
                             <img src="${pfpUrl}" class="pfp pfp-sm">
@@ -566,7 +833,7 @@
                                 <span class="post-display-name">${sanitizeHTML(post.displayName)} ${String(post.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>
                                 <span class="post-timestamp" data-timestamp="${post.isStory ? post.expiryTimestamp : post.timestamp}" data-is-story="${post.isStory || false}">${formatTimestamp(post)}</span>
                             </div>
-                            ${isAuthor ? '<button class="delete-btn" data-delete-type="post" title="Delete Post"><span class="material-symbols-rounded">close</span></button>' : ''}
+                            ${isAuthor ? optionsMenuHTML : ''}
                         </div>
                         <div class="post-content"></div>
                         <div class="post-actions">
@@ -584,12 +851,20 @@
                 },
                 createCommentElement(comment) {
                     const isAuthor = comment.userId === state.currentUser.userId;
+                    const optionsMenuHTML = `
+                        <div class="post-options">
+                            <button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button>
+                            <div class="options-menu hidden">
+                                <button class="delete-btn" data-action="delete-comment">Delete Comment</button>
+                            </div>
+                        </div>
+                    `;
                     return `<div class="comment" data-comment-id="${comment.commentId}" data-user-id="${comment.userId}">
                                 <div class="comment-text">
                                     <a class="comment-author">${sanitizeHTML(comment.displayName)} ${String(comment.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</a>
                                     <span>${sanitizeHTML(comment.commentText)}</span>
                                 </div>
-                                ${isAuthor ? '<button class="delete-btn" data-delete-type="comment" title="Delete Comment"><span class="material-symbols-rounded">close</span></button>' : ''}
+                                ${isAuthor ? optionsMenuHTML : ''}
                             </div>`;
                 },
                 renderNotifications() {
@@ -605,14 +880,12 @@
                         item.dataset.notificationId = n.notificationId;
                         item.dataset.actorId = n.actorUserId;
                         item.dataset.postId = n.postId;
-
                         let text = '';
                         switch(n.actionType) {
                             case 'like': text = 'liked your post.'; break;
                             case 'comment': text = 'commented on your post.'; break;
                             case 'follow': text = 'started following you.'; break;
                         }
-
                         const pfpUrl = sanitizeHTML(n.actorProfilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${n.actorDisplayName}`;
                         item.innerHTML = `
                             <div class="notification-item-clickable" style="display: flex; align-items: center; gap: 12px; flex-grow: 1;">
@@ -685,7 +958,6 @@
                         const user = state.currentUser;
                         const pfpUrl = sanitizeHTML(user.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${user.username}`;
                         const isVerified = String(user.isVerified).toUpperCase() === 'TRUE';
-                        
                         document.getElementById('settings-user-info-row').innerHTML = `
                             <a id="settings-profile-link" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; flex-grow: 1; cursor: pointer;">
                                 <img src="${pfpUrl}" class="pfp pfp-sm">
@@ -695,64 +967,267 @@
                                 </div>
                             </a>`;
                         document.getElementById('post-visibility-select').value = state.currentUser.postVisibility || 'Everyone';
+                        document.getElementById('privacy-switch').checked = state.currentUser.profilePrivacy === 'private';
                     }
                 },
                 showError(elId, msg) { const el = document.getElementById(elId); el.textContent = msg; el.classList.remove('hidden'); },
                 hideError(elId) { document.getElementById(elId).classList.add('hidden'); },
-                setButtonState(btnId, text, disabled) { const btn = document.getElementById(btnId); btn.textContent = text; btn.disabled = disabled; }
+                setButtonState(btnId, text, disabled) { const btn = document.getElementById(btnId); if(btn) { btn.textContent = text; btn.disabled = disabled; } },
+                
+                renderMessagesPage() {
+                    this.renderConversationsList();
+                    if (state.currentConversation.otherUserId) {
+                        this.renderConversationHistory();
+                    } else {
+                        document.getElementById('conversation-view').innerHTML = `
+                            <div id="conversation-placeholder">
+                                <span class="material-symbols-rounded">chat</span>
+                                <h3>Your Messages</h3>
+                                <p>Select a conversation to start chatting.</p>
+                            </div>`;
+                    }
+                },
+                renderConversationsList() {
+                    const container = document.getElementById('conversations-list');
+                    if (state.conversations.length === 0) {
+                        container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 15px;">No conversations yet.</p>';
+                        return;
+                    }
+                    container.innerHTML = state.conversations.map(convo => {
+                        const isActive = convo.otherUser.userId === state.currentConversation.otherUserId;
+                        const pfp = sanitizeHTML(convo.otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${convo.otherUser.displayName}`;
+                        return `
+                            <div class="conversation-item ${isActive ? 'active' : ''}" data-user-id="${convo.otherUser.userId}">
+                                <img src="${pfp}" class="pfp pfp-sm">
+                                <div class="convo-details">
+                                    <div class="username">${sanitizeHTML(convo.otherUser.displayName)}</div>
+                                    <div class="last-message">${sanitizeHTML(convo.lastMessage)}</div>
+                                </div>
+                                ${convo.unreadCount > 0 ? '<div class="unread-dot"></div>' : ''}
+                            </div>
+                        `;
+                    }).join('');
+                },
+                renderConversationHistory() {
+                    const conversationView = document.getElementById('conversation-view');
+                    const otherUser = state.conversations.find(c => c.otherUser.userId === state.currentConversation.otherUserId)?.otherUser;
+                    if (!otherUser) {
+                        conversationView.innerHTML = `<div id="conversation-placeholder"><p>Could not load conversation.</p></div>`;
+                        return;
+                    }
+                    const pfp = sanitizeHTML(otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${otherUser.displayName}`;
+                    conversationView.innerHTML = `
+                        <div id="conversation-header">
+                            <button id="back-to-convos-btn"><span class="material-symbols-rounded">arrow_back_ios_new</span></button>
+                            <a href="#" class="profile-link" data-user-id="${otherUser.userId}">
+                                <img src="${pfp}" class="pfp pfp-sm">
+                                <span>${sanitizeHTML(otherUser.displayName)} ${String(otherUser.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>
+                            </a>
+                        </div>
+                        <div id="messages-list">
+                            ${state.currentConversation.messages.map(msg => this.createMessageBubble(msg)).join('')}
+                        </div>
+                        <form id="message-input-form">
+                            <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required>
+                            <button type="submit" class="primary">Send</button>
+                        </form>
+                    `;
+                    const messagesList = document.getElementById('messages-list');
+                    if (messagesList) {
+                        messagesList.scrollTop = messagesList.scrollHeight;
+                        setTimeout(() => messagesList.scrollTop = messagesList.scrollHeight, 100);
+                    }
+                },
+                // MODIFIED to use a three-dot menu for deletion
+                createMessageBubble(message) {
+                    const isSent = message.senderId === state.currentUser.userId;
+                    let statusHTML = '';
+                    let wrapperContent = '';
+
+                    if (isSent) {
+                        if (message.status === 'sent') {
+                            statusHTML = '<div class="message-status">Sent</div>';
+                        } else if (message.status === 'sending') {
+                            statusHTML = '<div class="message-status">Sending...</div>';
+                        } else if (message.status === 'failed') {
+                            statusHTML = '<div class="message-status error">Failed to send</div>';
+                        }
+
+                        const optionsMenuHTML = `
+                            <div class="message-options">
+                                <button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button>
+                                <div class="options-menu hidden">
+                                    <button class="delete-btn" data-action="delete-message" data-message-id="${message.messageId}">Unsend</button>
+                                </div>
+                            </div>
+                        `;
+
+                        wrapperContent = `
+                            <div class="message-bubble sent">${sanitizeHTML(message.messageContent)}</div>
+                            ${optionsMenuHTML}
+                        `;
+                    } else {
+                        wrapperContent = `<div class="message-bubble received">${sanitizeHTML(message.messageContent)}</div>`;
+                    }
+                    
+                    return `
+                        <div class="message-wrapper ${isSent ? 'sent' : 'received'}" data-message-id="${message.messageId}">
+                           ${wrapperContent}
+                        </div>
+                        ${isSent ? statusHTML : ''}
+                    `;
+                },
             };
 
             const handlers = {
-                async login() { ui.hideError('login-error'); const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; if (!username || !password) return ui.showError('login-error', 'All fields required.'); ui.setButtonState('login-btn', 'Logging In...', true); try { const { user } = await api.call('login', { username, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); await core.initializeApp(); } catch (e) { if (e.message === 'ACCOUNT_SUSPENDED') { core.logout(false); core.navigateTo('suspended'); } else if (e.message === 'SERVER_OUTAGE') { core.navigateTo('outage'); } else { ui.showError('login-error', e.message); } } finally { ui.setButtonState('login-btn', 'Log In', false); } },
-                async register() { ui.hideError('register-error'); const [username, displayName, password] = [document.getElementById('register-username').value.trim(), document.getElementById('register-displayname').value.trim(), document.getElementById('register-password').value.trim()]; if (!username || !displayName || !password) return ui.showError('register-error', 'All fields required.'); if (password.length < 4) return ui.showError('register-error', 'Password must be at least 4 characters long.'); ui.setButtonState('register-btn', 'Signing Up...', true); try { const { user } = await api.call('register', { username, displayName, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); await core.initializeApp(); } catch (e) { ui.showError('register-error', e.message); } finally { ui.setButtonState('register-btn', 'Sign Up', false); } },
-                async createPost() { 
-                    const contentInput = document.getElementById('post-content-input'); 
-                    const postType = document.getElementById('post-type-select').value;
-                    const isStory = postType.startsWith('story');
-                    const storyDuration = isStory ? parseInt(postType.split('-')[1]) : 0;
-
-                    let postContent = sanitizeHTML(contentInput.value.trim()); 
-                    const imageUrl = state.postImageUrl; 
-                    if (!postContent && !imageUrl) return; 
-                    if (imageUrl) { postContent += `<br><img src="${sanitizeHTML(imageUrl)}" alt="user image">`; } 
-                    
-                    ui.setButtonState('submit-post-btn', 'Posting...', true); 
+                async login() {
+                    ui.hideError('login-error');
+                    const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()];
+                    if (!username || !password) return ui.showError('login-error', 'All fields required.');
+                    ui.setButtonState('login-btn', 'Logging In...', true);
+                    try {
+                        const { user } = await api.call('login', { username, password });
+                        state.currentUser = user;
+                        localStorage.setItem('currentUser', JSON.stringify(user));
+                        await core.initializeApp();
+                    } catch (e) {
+                        if (e.message === 'ACCOUNT_BANNED') {
+                            core.logout(false);
+                            ui.renderBanPage(e.banDetails);
+                            core.navigateTo('suspended');
+                        } else if (e.message === 'SERVER_OUTAGE') {
+                            core.logout(false);
+                            core.navigateTo('outage');
+                        } else {
+                            ui.showError('login-error', e.message);
+                        }
+                    } finally {
+                        ui.setButtonState('login-btn', 'Log In', false);
+                    }
+                },
+                async register() { 
+                    ui.hideError('register-error'); 
+                    const [username, displayName, password] = [document.getElementById('register-username').value.trim(), document.getElementById('register-displayname').value.trim(), document.getElementById('register-password').value.trim()]; 
+                    const tosChecked = document.getElementById('register-tos').checked;
+                    if (!tosChecked) return ui.showError('register-error', 'You must agree to the Terms of Service.');
+                    if (!username || !displayName || !password) return ui.showError('register-error', 'All fields required.'); 
+                    if (password.length < 4) return ui.showError('register-error', 'Password must be at least 4 characters long.'); 
+                    ui.setButtonState('register-btn', 'Signing Up...', true); 
                     try { 
-                        await api.call('createPost', { userId: state.currentUser.userId, postContent, isStory, storyDuration }); 
-                        contentInput.value = ''; 
-                        state.postImageUrl = null;
-                        ui.renderImagePreview();
-                        document.getElementById('post-type-select').value = 'regular';
-                        await core.refreshFeed(false); 
+                        const { user } = await api.call('register', { username, displayName, password }); 
+                        state.currentUser = user; 
+                        localStorage.setItem('currentUser', JSON.stringify(user)); 
+                        await core.initializeApp(); 
                     } catch (e) { 
-                        alert(`Error: ${e.message}`); 
+                        ui.showError('register-error', e.message); 
                     } finally { 
-                        ui.setButtonState('submit-post-btn', 'Post', false); 
+                        ui.setButtonState('register-btn', 'Sign Up', false); 
                     } 
+                },
+                async createPost() {
+                    const contentInput = document.getElementById('post-content-input');
+                    let postContent = sanitizeHTML(contentInput.value.trim());
+                    const imageUrl = state.postImageUrl;
+                    if (!postContent && !imageUrl && !state.editingPostId) return;
+                    if (imageUrl) {
+                        postContent += `<br><img src="${sanitizeHTML(imageUrl)}" alt="user image">`;
+                    }
+                    const isUpdating = !!state.editingPostId;
+                    const button = document.getElementById('submit-post-btn');
+                    const originalButtonText = isUpdating ? 'Save Changes' : 'Post';
+                    ui.setButtonState(button.id, 'Saving...', true);
+                    try {
+                        if (isUpdating) {
+                            await api.call('updatePost', { userId: state.currentUser.userId, postId: state.editingPostId, postContent: postContent });
+                        } else {
+                            const postType = document.getElementById('post-type-select').value;
+                            const isStory = postType.startsWith('story');
+                            const storyDuration = isStory ? parseInt(postType.split('-')[1]) : 0;
+                            await api.call('createPost', { userId: state.currentUser.userId, postContent, isStory, storyDuration });
+                        }
+                        contentInput.value = '';
+                        state.postImageUrl = null;
+                        state.editingPostId = null;
+                        ui.renderImagePreview();
+                        button.textContent = 'Post';
+                        document.getElementById('post-type-select').value = 'regular';
+                        await core.refreshFeed(false);
+                    } catch (e) {
+                        alert(`Error: ${e.message}`);
+                    } finally {
+                        ui.setButtonState(button.id, originalButtonText, false);
+                        if (isUpdating) {
+                            button.textContent = 'Post';
+                            state.editingPostId = null; 
+                        }
+                    }
+                },
+                enterEditMode(postId) {
+                    const post = state.posts.find(p => p.postId === postId);
+                    if (!post) return;
+                    const textContent = post.postContent.replace(/<br><img src=".*?" alt=".*?">/g, '').trim();
+                    document.getElementById('post-content-input').value = textContent;
+                    document.getElementById('submit-post-btn').textContent = 'Save Changes';
+                    state.editingPostId = postId;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    document.getElementById('post-content-input').focus();
                 },
                 async addComment(postId, commentText) { if (!commentText.trim()) return; const tempComment = { commentId: `temp_${Date.now()}`, userId: state.currentUser.userId, displayName: state.currentUser.displayName, isVerified: state.currentUser.isVerified, commentText: commentText }; const postIndex = state.posts.findIndex(p => p.postId === postId); if (postIndex > -1) { state.posts[postIndex].comments.push(tempComment); ui.render(); } try { await api.call('addComment', { postId, userId: state.currentUser.userId, commentText }); await core.refreshFeed(false); } catch (e) { alert(`Error: ${e.message}`); const pIndex = state.posts.findIndex(p => p.postId === postId); if(pIndex > -1) { state.posts[pIndex].comments = state.posts[pIndex].comments.filter(c => c.commentId !== tempComment.commentId); ui.render(); }}},
                 async toggleLike(postId) { const post = state.posts.find(p => p.postId === postId); if (!post) return; const likeIndex = post.likes.findIndex(l => l.userId === state.currentUser.userId); if (likeIndex > -1) post.likes.splice(likeIndex, 1); else post.likes.push({ userId: state.currentUser.userId }); ui.render(); try { await api.call('toggleLike', { postId, userId: state.currentUser.userId }); } catch (e) { if (likeIndex > -1) post.likes.push({ userId: state.currentUser.userId }); else post.likes.pop(); ui.render(); alert(`Error: ${e.message}`); }},
                 async updateProfile() { ui.hideError('edit-profile-error'); const [displayName, pfpUrl, description] = [document.getElementById('edit-display-name').value, document.getElementById('edit-pfp-url').value, document.getElementById('edit-description').value]; ui.setButtonState('save-profile-btn', 'Saving...', true); try { await api.call('updateProfile', { userId: state.currentUser.userId, displayName, profilePictureUrl: pfpUrl, description }); state.currentUser = { ...state.currentUser, displayName, profilePictureUrl: pfpUrl, description }; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); await core.refreshFeed(false); await handlers.showProfile(state.currentUser.userId); } catch (e) { ui.showError('edit-profile-error', e.message); } finally { ui.setButtonState('save-profile-btn', 'Save Changes', false); }},
-                async deletePost(postId) { if (!confirm("Delete this post?")) return; try { await api.call('deletePost', { postId, userId: state.currentUser.userId }); await core.refreshFeed(false); } catch(e) { alert(`Error: ${e.message}`); }},
-                async deleteComment(commentId) { if (!confirm("Delete this comment?")) return; try { await api.call('deleteComment', { commentId, userId: state.currentUser.userId }); await core.refreshFeed(false); } catch(e) { alert(`Error: ${e.message}`); }},
+                async deletePost(postId) {
+                    if (!confirm("Delete this post?")) return;
+                    const postToDeleteIndex = state.posts.findIndex(p => p.postId === postId);
+                    if (postToDeleteIndex === -1) return;
+                    const postToDelete = state.posts[postToDeleteIndex];
+                    state.posts.splice(postToDeleteIndex, 1);
+                    ui.render();
+                    try {
+                        await api.call('deletePost', { postId, userId: state.currentUser.userId });
+                    } catch(e) {
+                        alert(`Error: Could not delete post. ${e.message}`);
+                        state.posts.splice(postToDeleteIndex, 0, postToDelete);
+                        ui.render();
+                    }
+                },
+                async deleteComment(commentId) {
+                    if (!confirm("Delete this comment?")) return;
+                    let postIndex = -1, commentIndex = -1, commentToDelete = null;
+                    for (let i = 0; i < state.posts.length; i++) {
+                        const foundIndex = state.posts[i].comments.findIndex(c => c.commentId === commentId);
+                        if (foundIndex !== -1) {
+                            postIndex = i;
+                            commentIndex = foundIndex;
+                            commentToDelete = state.posts[i].comments[foundIndex];
+                            break;
+                        }
+                    }
+                    if (postIndex === -1) return;
+                    state.posts[postIndex].comments.splice(commentIndex, 1);
+                    ui.render();
+                    try {
+                        await api.call('deleteComment', { commentId, userId: state.currentUser.userId });
+                    } catch(e) {
+                        alert(`Error: Could not delete comment. ${e.message}`);
+                        state.posts[postIndex].comments.splice(commentIndex, 0, commentToDelete);
+                        ui.render();
+                    }
+                },
                 async toggleFollow(followingId) {
                     const followBtn = document.getElementById('follow-btn');
                     if (!followBtn) return;
-                    
                     followBtn.disabled = true;
-
                     try {
                         const result = await api.call('toggleFollow', { followerId: state.currentUser.userId, followingId });
-                        
+                        state.profileUser.relationship = result.newRelationship;
+                        const { user } = await api.call('getUserProfile', { userId: followingId, currentUserId: state.currentUser.userId }, 'GET');
+                        state.profileUser = user;
                         const isNowFollowing = result.newRelationship === 'Following' || result.newRelationship === 'Friends';
                         if (isNowFollowing) {
                              if(!state.currentUserFollowingList.includes(followingId)) state.currentUserFollowingList.push(followingId);
-                             state.profileUser.followers++;
                         } else {
                             state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
-                            state.profileUser.followers--;
                         }
-                        state.profileUser.relationship = result.newRelationship;
                     } catch (e) {
                         alert(`Error: ${e.message}`);
                     } finally {
@@ -760,46 +1235,24 @@
                     }
                 },
                 async search(query) { const container = document.getElementById('search-results'); container.innerHTML = '<p style="text-align:center; color: var(--secondary-text-color);">Searching...</p>'; try { const results = await api.call('search', { query }, 'GET'); ui.renderSearchResults(results); } catch(e) { container.innerHTML = `<p class="error-message">Search failed: ${e.message}</p>`; }},
+                // REVERTED showProfile to always fetch
                 async showProfile(userId, scrollToPostId = null) {
                     if (state.currentView !== 'profile') {
                         state.feedScrollPosition = window.scrollY;
                     }
                     state.scrollToPostId = scrollToPostId;
                     core.navigateTo('profile');
-
-                    const userFromCache = state.posts.find(p => p.userId === userId);
-                    if (userFromCache) {
-                        const isFollowing = state.currentUserFollowingList.includes(userId);
-                        const isFollower = state.currentUserFollowersList.includes(userId);
-                        
-                        let preliminaryRelationship = "none";
-                        if (isFollowing && isFollower) { preliminaryRelationship = 'Friends';
-                        } else if (isFollowing) { preliminaryRelationship = 'Following'; }
-
-                        state.profileUser = { 
-                            ...userFromCache, 
-                            relationship: preliminaryRelationship 
-                        };
-                        ui.renderProfilePage();
-                    } else {
-                        state.profileUser = null; 
-                        ui.showProfileSkeleton();
-                    }
-                    
-                    if (userId !== state.currentUser.userId) {
-                        try {
-                            const { user } = await api.call('getUserProfile', { userId, currentUserId: state.currentUser.userId }, 'GET');
-                            if (!state.profileUser || state.profileUser.userId === user.userId) {
-                                state.profileUser = user; 
-                                ui.renderProfilePage();
-                            }
-                        } catch (e) {
-                            console.error("Failed to refresh profile:", e);
-                            if (!userFromCache) {
-                                document.getElementById('profile-content').innerHTML = `<p class="error-message" style="text-align:center;">Could not load profile: ${e.message}</p>`;
-                                document.getElementById('profile-feed').innerHTML = '';
-                            }
+                    ui.showProfileSkeleton();
+                    try {
+                        const { user } = await api.call('getUserProfile', { userId, currentUserId: state.currentUser.userId }, 'GET');
+                        if (state.currentView === 'profile') {
+                            state.profileUser = user; 
+                            ui.renderProfilePage();
                         }
+                    } catch (e) {
+                        console.error("Failed to load profile:", e);
+                        document.getElementById('profile-content').innerHTML = `<p class="error-message" style="text-align:center;">Could not load profile: ${e.message}</p>`;
+                        document.getElementById('profile-feed').innerHTML = '';
                     }
                 },
                 showHashtagFeed(tag) {
@@ -810,13 +1263,10 @@
                     const titleEl = document.getElementById('hashtag-title');
                     const feedEl = document.getElementById('hashtag-feed');
                     const fullHashtag = `#${tag.toLowerCase()}`;
-                    
                     titleEl.textContent = `Posts tagged with ${fullHashtag}`;
-                    
                     const filteredPosts = state.posts.filter(post => 
                         (post.postContent || '').toLowerCase().includes(fullHashtag)
                     );
-                    
                     ui.renderFeed(filteredPosts, feedEl, false);
                 },
                 async showNotifications() {
@@ -856,11 +1306,144 @@
                     } finally {
                         selectElement.disabled = false;
                     }
-                }
+                },
+                async updateProfilePrivacy(e) {
+                    const newPrivacy = e.target.checked ? 'private' : 'public';
+                    const switchElement = e.target;
+                    switchElement.disabled = true;
+                    try {
+                        await api.call('updateProfilePrivacy', { userId: state.currentUser.userId, privacy: newPrivacy });
+                        state.currentUser.profilePrivacy = newPrivacy;
+                        localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
+                    } catch (err) {
+                        alert('Could not update setting: ' + err.message);
+                        switchElement.checked = state.currentUser.profilePrivacy === 'private';
+                    } finally {
+                        switchElement.disabled = false;
+                    }
+                },
+                async loadMessagesView() {
+                    core.navigateTo('messages');
+                    ui.renderMessagesPage();
+                },
+                async loadConversation(otherUserId) {
+                    if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
+                    state.currentConversation.otherUserId = otherUserId;
+                    const convo = state.conversations.find(c => c.otherUser.userId === otherUserId);
+                    if (convo) convo.unreadCount = 0;
+                    core.updateMessageDot();
+                    document.querySelector('.messages-container').classList.add('show-chat-view');
+                    ui.renderMessagesPage();
+                    document.getElementById('conversation-view').innerHTML = '<div id="messages-list" style="display: flex; justify-content: center; align-items: center; height: 100%;"><p>Loading messages...</p></div>';
+                    try {
+                        const { messages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId }, 'GET');
+                        state.currentConversation.messages = messages.map(m => ({...m, status: 'sent'}));
+                        ui.renderConversationHistory();
+                        api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId });
+                        state.messagePollingIntervalId = setInterval(() => handlers.pollNewMessages(otherUserId), 5000);
+                    } catch (e) {
+                        document.getElementById('messages-list').innerHTML = `<p class="error-message">Could not load conversation: ${e.message}</p>`;
+                    }
+                },
+                async sendMessage() {
+                    const input = document.getElementById('message-input');
+                    const messageContent = input.value.trim();
+                    const otherUserId = state.currentConversation.otherUserId;
+                    if (!messageContent || !otherUserId) return;
+                    input.value = '';
+                    input.disabled = true;
+                    document.querySelector('#message-input-form button').disabled = true;
+                    const tempId = `temp_${Date.now()}`;
+                    const tempMessage = { messageId: tempId, senderId: state.currentUser.userId, messageContent, status: 'sending' };
+                    state.currentConversation.messages.push(tempMessage);
+                    ui.renderConversationHistory();
+                    try {
+                        const { confirmedMessage } = await api.call('sendMessage', { senderId: state.currentUser.userId, recipientId: otherUserId, messageContent });
+                        const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === tempId);
+                        if (messageIndex > -1) {
+                            state.currentConversation.messages[messageIndex] = { ...confirmedMessage, status: 'sent' };
+                        }
+                        ui.renderConversationHistory();
+                    } catch (e) {
+                        alert(`Error: ${e.message}`);
+                        const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === tempId);
+                        if (messageIndex > -1) {
+                            state.currentConversation.messages[messageIndex].status = 'failed';
+                        }
+                        ui.renderConversationHistory();
+                    } finally {
+                        const finalInput = document.getElementById('message-input');
+                        if (finalInput) { finalInput.disabled = false; finalInput.focus(); }
+                        const button = document.querySelector('#message-input-form button');
+                        if (button) button.disabled = false;
+                    }
+                },
+                // MODIFIED handler to include confirmation
+                async deleteMessage(messageId) {
+                    if (!confirm("Are you sure you want to unsend this message? This cannot be undone.")) return;
+                    
+                    const messageWrapper = document.querySelector(`.message-wrapper[data-message-id="${messageId}"]`);
+                    const messageStatus = document.querySelector(`.message-wrapper[data-message-id="${messageId}"] + .message-status`);
+                    if (!messageWrapper) return;
+
+                    messageWrapper.style.opacity = '0.5';
+
+                    try {
+                        await api.call('deleteMessage', { userId: state.currentUser.userId, messageId });
+                        const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === messageId);
+                        if (messageIndex > -1) {
+                            state.currentConversation.messages.splice(messageIndex, 1);
+                        }
+                        messageWrapper.remove();
+                        if (messageStatus) messageStatus.remove();
+                    } catch (e) {
+                        alert(`Error: Could not unsend message. ${e.message}`);
+                        messageWrapper.style.opacity = '1';
+                    }
+                },
+                async pollNewMessages(otherUserId, isForced = false) {
+                    if (state.currentView !== 'messages' || state.currentConversation.otherUserId !== otherUserId) {
+                        if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
+                        return;
+                    }
+                    try {
+                        const { messages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId }, 'GET');
+                        if (isForced || messages.length !== state.currentConversation.messages.length) {
+                            state.currentConversation.messages = messages.map(m => ({...m, status: 'sent'}));
+                            ui.renderConversationHistory();
+                            api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId });
+                        }
+                    } catch (e) { console.error("Polling failed:", e.message); }
+                },
+                async startConversationFromProfile(otherUserId) {
+                    core.navigateTo('messages');
+                    const existingConvo = state.conversations.find(c => c.otherUser.userId === otherUserId);
+                    if (!existingConvo && state.profileUser && state.profileUser.userId === otherUserId) {
+                        const newConvo = {
+                            otherUser: {
+                                userId: state.profileUser.userId,
+                                displayName: state.profileUser.displayName,
+                                profilePictureUrl: state.profileUser.profilePictureUrl,
+                                isVerified: state.profileUser.isVerified
+                            },
+                            lastMessage: '',
+                            timestamp: new Date().toISOString(),
+                            unreadCount: 0
+                        };
+                        state.conversations.unshift(newConvo);
+                    }
+                    await handlers.loadConversation(otherUserId);
+                },
             };
 
             const core = {
                 navigateTo(view) { 
+                    if (state.currentView === 'messages' && view !== 'messages') {
+                        if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
+                        state.messagePollingIntervalId = null;
+                        state.currentConversation.otherUserId = null;
+                        document.querySelector('.messages-container').classList.remove('show-chat-view');
+                    }
                     if (state.backgroundPosts) { state.posts = state.backgroundPosts; state.backgroundPosts = null; } 
                     state.currentView = view; 
                     ui.render(); 
@@ -870,67 +1453,56 @@
                         window.scrollTo(0, 0);
                     }
                 },
+                // REVERTED refreshFeed to remove preloading logic
                 async refreshFeed(showLoader = true) { 
                     if (showLoader) ui.showFeedSkeleton(document.getElementById('feed')); 
                     try { 
-                        const [postsResult, notificationsResult] = await Promise.all([
+                        const [postsAndConvosResult, notificationsResult] = await Promise.all([
                             api.call('getPosts', { userId: state.currentUser.userId }, 'GET'),
                             api.call('getNotifications', { userId: state.currentUser.userId }, 'GET')
                         ]);
-
-                        const { posts, currentUserFollowingList, currentUserFollowersList, currentUserData, bannerText } = postsResult;
-                        
+                        const { posts, conversations, currentUserFollowingList, currentUserFollowersList, currentUserData, bannerText } = postsAndConvosResult;
                         const banner = document.getElementById('global-banner');
                         const root = document.documentElement;
                         if(bannerText) {
                             banner.textContent = bannerText;
                             banner.classList.remove('hidden');
-                            setTimeout(() => {
-                                root.style.setProperty('--banner-height', `${banner.offsetHeight}px`);
-                            }, 0);
+                            setTimeout(() => { root.style.setProperty('--banner-height', `${banner.offsetHeight}px`); }, 0);
                         } else {
                             banner.classList.add('hidden');
                             root.style.setProperty('--banner-height', '0px');
                         }
-
                         if (currentUserData) {
-                            if (currentUserData.isSuspended === 'OUTAGE') {
-                                core.logout(false);
-                                return core.navigateTo('outage');
-                            }
-                            if (currentUserData.isSuspended === true || String(currentUserData.isSuspended).toUpperCase() === 'TRUE') {
-                                core.logout(false);
-                                return core.navigateTo('suspended');
-                            }
+                            if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
+                            if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); core.logout(false); return core.navigateTo('suspended'); }
                             state.currentUser = currentUserData; 
-                            localStorage.setItem('currentUser', JSON.stringify(currentUserData)); 
+                            localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); 
                         } else {
                             throw new Error("Could not validate user session.");
                         }
-
-                        state.posts = posts; 
+                        state.posts = posts;
+                        state.conversations = conversations;
                         state.currentUserFollowingList = currentUserFollowingList;
                         state.currentUserFollowersList = currentUserFollowersList;
-
                         const { notifications } = notificationsResult;
                         state.notifications = notifications;
-                        state.unreadNotificationCount = notifications.filter(n => n.isRead === 'FALSE' || n.isRead === false).length;
+                        state.unreadNotificationCount = notifications.filter(n => !n.isRead || n.isRead === 'FALSE').length;
                         this.updateNotificationDot();
-
+                        this.updateMessageDot();
                     } catch(e) { 
                         console.error("Feed refresh error:", e);
-                        if(state.currentView === 'feed') {
-                           document.getElementById('feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`; 
-                        }
-                        if (e.message.includes("validate user session")) {
-                            setTimeout(() => core.logout(), 2000);
-                        }
+                        if(state.currentView === 'feed') { document.getElementById('feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`; }
+                        if (e.message.includes("validate user session")) { setTimeout(() => core.logout(), 2000); }
                     } finally { 
                         if (['feed', 'profile', 'hashtagFeed'].includes(state.currentView)) ui.render(); 
                     }
                 },
                 updateNotificationDot() {
                     document.getElementById('notification-dot').style.display = state.unreadNotificationCount > 0 ? 'block' : 'none';
+                },
+                updateMessageDot() {
+                    const hasUnread = state.conversations.some(c => c.unreadCount > 0);
+                    document.getElementById('message-dot').style.display = hasUnread ? 'block' : 'none';
                 },
                 startStoryCountdownInterval() {
                     if (state.storyUpdateIntervalId) clearInterval(state.storyUpdateIntervalId);
@@ -950,8 +1522,12 @@
                     state.currentUser = null; 
                     if (state.backgroundRefreshIntervalId) clearInterval(state.backgroundRefreshIntervalId);
                     if (state.storyUpdateIntervalId) clearInterval(state.storyUpdateIntervalId);
+                    if (state.banCountdownIntervalId) clearInterval(state.banCountdownIntervalId);
+                    if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
                     state.backgroundRefreshIntervalId = null;
                     state.storyUpdateIntervalId = null;
+                    state.banCountdownIntervalId = null;
+                    state.messagePollingIntervalId = null;
                     if(forceReload) {
                         window.location.reload(); 
                     }
@@ -966,12 +1542,11 @@
                     document.getElementById('settings-btn').addEventListener('click', () => ui.toggleModal('settings', true));
                     document.getElementById('search-btn').addEventListener('click', () => ui.toggleModal('search', true));
                     document.getElementById('notifications-btn').addEventListener('click', handlers.showNotifications);
-                    
+                    document.getElementById('messages-btn').addEventListener('click', () => handlers.loadMessagesView());
                     document.querySelector('#settings-modal .close-modal-btn').addEventListener('click', () => ui.toggleModal('settings', false));
                     document.querySelector('#search-modal .close-modal-btn').addEventListener('click', () => ui.toggleModal('search', false));
                     document.querySelector('#notifications-modal .close-modal-btn').addEventListener('click', () => ui.toggleModal('notifications', false));
                     document.querySelector('#image-url-modal .close-modal-btn').addEventListener('click', () => ui.toggleModal('imageUrl', false));
-
                     document.getElementById('logout-btn').addEventListener('click', core.logout);
                     document.getElementById('suspended-logout-btn').addEventListener('click', core.logout);
                     document.getElementById('outage-logout-btn').addEventListener('click', core.logout);
@@ -979,77 +1554,100 @@
                     document.getElementById('back-to-profile-btn').addEventListener('click', () => { handlers.showProfile(state.profileUser.userId) });
                     document.getElementById('search-input').addEventListener('input', (e) => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => handlers.search(e.target.value), 300); });
                     document.getElementById('post-visibility-select').addEventListener('change', handlers.updatePostVisibility);
-                    
+                    document.getElementById('privacy-switch').addEventListener('change', handlers.updateProfilePrivacy);
                     document.getElementById('add-image-btn').addEventListener('click', () => ui.toggleModal('imageUrl', true));
                     document.getElementById('image-url-modal-done-btn').addEventListener('click', () => {
                         const url = document.getElementById('image-url-modal-input').value.trim();
-                        if (url) {
-                            state.postImageUrl = url;
-                            ui.renderImagePreview();
-                        }
+                        if (url) { state.postImageUrl = url; ui.renderImagePreview(); }
                         document.getElementById('image-url-modal-input').value = '';
                         ui.toggleModal('imageUrl', false);
                     });
-
-                    document.getElementById('create-post-form').addEventListener('click', (e) => {
-                        if (e.target.id === 'remove-image-btn') {
-                            state.postImageUrl = null;
-                            ui.renderImagePreview();
-                        }
-                    });
-
+                    document.getElementById('register-tos').addEventListener('change', (e) => { document.getElementById('register-btn').disabled = !e.target.checked; });
+                    document.getElementById('create-post-form').addEventListener('click', (e) => { if (e.target.id === 'remove-image-btn') { state.postImageUrl = null; ui.renderImagePreview(); } });
                     document.getElementById('notifications-list').addEventListener('click', (e) => {
-                        const item = e.target.closest('.notification-item');
-                        if(!item) return;
-                        if(e.target.closest('.delete-notification-btn')) {
-                            handlers.deleteNotification(item.dataset.notificationId);
-                            return;
-                        }
+                        const item = e.target.closest('.notification-item'); if(!item) return;
+                        if(e.target.closest('.delete-notification-btn')) { handlers.deleteNotification(item.dataset.notificationId); return; }
                         const clickableArea = e.target.closest('.notification-item-clickable');
                         if (clickableArea) {
                             ui.toggleModal('notifications', false);
                             const notification = state.notifications.find(n => n.notificationId === item.dataset.notificationId);
                             if (!notification) return;
-                            if (notification.postAuthorId && notification.postId && notification.postId !== 'null') {
-                                handlers.showProfile(notification.postAuthorId, notification.postId);
-                            } 
-                            else if (notification.actorUserId) {
-                                handlers.showProfile(notification.actorUserId);
-                            }
+                            if (notification.postAuthorId && notification.postId && notification.postId !== 'null') { handlers.showProfile(notification.postAuthorId, notification.postId); } 
+                            else if (notification.actorUserId) { handlers.showProfile(notification.actorUserId); }
                         }
                     });
-
-                    document.body.addEventListener('click', (e) => { 
-                        const target = e.target; 
-                        const deleteBtn = target.closest('.delete-btn'); 
-                        if (deleteBtn && !target.closest('.notification-item')) {
-                            if (target.closest('.post')) { handlers.deletePost(target.closest('.post').dataset.postId); return; } 
-                            if (target.closest('.comment')) { handlers.deleteComment(target.closest('.comment').dataset.commentId); return; } 
-                        } 
-                        if (target.closest('[data-nav="feed"]')) { e.preventDefault(); return core.navigateTo('feed'); } 
+                    // MODIFIED main click listener for new message options menu
+                    document.body.addEventListener('click', (e) => {
+                        const target = e.target;
+                        const optionsBtn = target.closest('.options-btn');
+                        if (optionsBtn) {
+                            e.preventDefault();
+                            const menu = optionsBtn.nextElementSibling;
+                            const isHidden = menu.classList.contains('hidden');
+                            document.querySelectorAll('.options-menu').forEach(m => m.classList.add('hidden'));
+                            if (isHidden) menu.classList.remove('hidden');
+                            return;
+                        }
+                        if (!target.closest('.options-menu')) {
+                            document.querySelectorAll('.options-menu').forEach(m => m.classList.add('hidden'));
+                        }
+                        const actionButton = target.closest('[data-action]');
+                        if (actionButton) {
+                            const action = actionButton.dataset.action;
+                            if (action === 'delete-post') handlers.deletePost(target.closest('.post').dataset.postId);
+                            else if (action === 'delete-comment') handlers.deleteComment(target.closest('.comment').dataset.commentId);
+                            else if (action === 'edit-post') handlers.enterEditMode(target.closest('.post').dataset.postId);
+                            else if (action === 'delete-message') handlers.deleteMessage(actionButton.dataset.messageId);
+                            return;
+                        }
+                        if (target.closest('[data-nav="feed"]')) { e.preventDefault(); return core.navigateTo('feed'); }
                         const hashtagLink = target.closest('.hashtag-link');
                         if (hashtagLink) { e.preventDefault(); handlers.showHashtagFeed(hashtagLink.dataset.hashtag); return; }
-                        const profileLink = target.closest('.post-header, .comment-author, .search-result-user'); 
-                        if (profileLink) { const userElement = profileLink.closest('[data-user-id]'); if (userElement && userElement.dataset.userId) { ui.toggleModal('search', false); handlers.showProfile(userElement.dataset.userId); return; } } 
-                        if (target.closest('#edit-profile-btn')) return core.navigateTo('editProfile'); 
-                        if (target.closest('#follow-btn')) return handlers.toggleFollow(state.profileUser.userId); 
-                        if (target.closest('#settings-profile-link')) { ui.toggleModal('settings', false); handlers.showProfile(state.currentUser.userId); return; } 
-                        const likeBtn = target.closest('.like-btn'); 
-                        if (likeBtn) return handlers.toggleLike(target.closest('.post').dataset.postId); });
-                    document.body.addEventListener('submit', (e) => { const commentForm = e.target.closest('.comment-form'); if(commentForm) { e.preventDefault(); const input = commentForm.querySelector('input'); handlers.addComment(e.target.closest('.post').dataset.postId, input.value); input.value = ''; }});
+                        const profileLink = target.closest('.post-header, .comment-author, .search-result-user, #conversation-header .profile-link');
+                        if (profileLink && !target.closest('.post-options')) {
+                             const userElement = profileLink.closest('[data-user-id]');
+                             if (userElement && userElement.dataset.userId) { 
+                                 ui.toggleModal('search', false);
+                                 handlers.showProfile(userElement.dataset.userId); 
+                                 return; 
+                             }
+                        }
+                        if (target.closest('#edit-profile-btn')) return core.navigateTo('editProfile');
+                        if (target.closest('#follow-btn')) return handlers.toggleFollow(state.profileUser.userId);
+                        if (target.closest('#settings-profile-link')) { ui.toggleModal('settings', false); handlers.showProfile(state.currentUser.userId); return; }
+                        const likeBtn = target.closest('.like-btn');
+                        if (likeBtn) return handlers.toggleLike(target.closest('.post').dataset.postId);
+                        if (target.closest('#message-user-btn')) return handlers.startConversationFromProfile(state.profileUser.userId);
+                        const conversationItem = target.closest('.conversation-item');
+                        if (conversationItem) {
+                            const otherUserId = conversationItem.dataset.userId;
+                            if (otherUserId && otherUserId !== state.currentConversation.otherUserId) {
+                                handlers.loadConversation(otherUserId);
+                            }
+                            return;
+                        }
+                        const backToConvosBtn = target.closest('#back-to-convos-btn');
+                        if (backToConvosBtn) {
+                            document.querySelector('.messages-container').classList.remove('show-chat-view');
+                            if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
+                            state.messagePollingIntervalId = null;
+                            state.currentConversation.otherUserId = null;
+                        }
+                    });
+                    document.body.addEventListener('submit', (e) => { 
+                        const commentForm = e.target.closest('.comment-form'); 
+                        if(commentForm) { e.preventDefault(); const input = commentForm.querySelector('input'); handlers.addComment(e.target.closest('.post').dataset.postId, input.value); input.value = ''; }
+                        const messageForm = e.target.closest('#message-input-form');
+                        if(messageForm) { e.preventDefault(); handlers.sendMessage(); }
+                    });
                     document.getElementById('auth-view').addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; const activeForm = !document.getElementById('login-form').classList.contains('hidden') ? document.getElementById('login-form') : document.getElementById('register-form'); e.preventDefault(); const inputs = [...activeForm.querySelectorAll('input')]; const currentInputIndex = inputs.findIndex(input => input === document.activeElement); if (currentInputIndex > -1 && currentInputIndex < inputs.length - 1) { inputs[currentInputIndex + 1].focus(); } else { activeForm.querySelector('button.primary').click(); } });
                 },
                 async initializeApp() {
                     const savedUser = JSON.parse(localStorage.getItem('currentUser'));
-                    if (!savedUser) {
-                        return core.navigateTo('auth');
-                    }
-                    
+                    if (!savedUser) { return core.navigateTo('auth'); }
                     state.currentUser = savedUser;
-
                     core.navigateTo('feed');
                     ui.showFeedSkeleton(document.getElementById('feed'));
-
                     try {
                         await core.refreshFeed(false);
                         core.startStoryCountdownInterval();
@@ -1063,7 +1661,6 @@
                     const savedTheme = localStorage.getItem('theme') || 'light'; 
                     document.documentElement.setAttribute('data-theme', savedTheme); 
                     document.getElementById('theme-switch').checked = savedTheme === 'dark';
-                    
                     if (localStorage.getItem('currentUser')) { 
                         core.initializeApp(); 
                     } else { 
@@ -1075,10 +1672,8 @@
             const formatTimestamp = (post) => {
                 const isoString = post.isStory ? post.expiryTimestamp : post.timestamp;
                 if (!isoString) return '';
-                
                 const date = new Date(isoString);
                 const now = new Date();
-                
                 if (post.isStory) {
                     const diff = date - now;
                     if (diff <= 0) return 'Expired';
@@ -1086,7 +1681,6 @@
                     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                     return `${hours}h ${minutes}m left`;
                 }
-
                 const secondsAgo = Math.round((now - date) / 1000);
                 if (secondsAgo < 60) return 'just now';
                 const minutesAgo = Math.round(secondsAgo / 60);
