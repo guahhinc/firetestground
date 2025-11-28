@@ -2786,7 +2786,6 @@
                         const currentUserId = params.userId || params;
                         console.log('🟡 [TSV getNotifications] Fetching for user:', currentUserId);
                         
-                        // We fetch the Notifications sheet as RAW text to avoid the parser swallowing the first row as headers
                         const notifSheet = TSV_SHEETS.notifications;
                         const notifResponse = await fetch(notifSheet.url + '&cachebust=' + Date.now());
                         const notifText = await notifResponse.text();
@@ -2799,9 +2798,16 @@
                         
                         const blockMap = {};
 
-                        // Parse notifications manually (No Header assumption)
+                        // Parse notifications manually
                         const lines = notifText.split('\n').filter(line => line.trim() !== '');
-                        // Map index 0->ID, 1->Recipient, 2->Actor, 3->Action, 4->PostID, 5->Time, 6->Read
+                        
+                        // FIX: Explicitly remove the first line (index 0) if it exists.
+                        // The backend treats row 1 as a header and refuses to delete it.
+                        // We must hide it from the UI so users don't try to interact with "ghost" data.
+                        if (lines.length > 0) {
+                            lines.shift();
+                        }
+
                         const notificationsData = lines.map(line => {
                             const cols = line.split('\t');
                             return {
@@ -2814,13 +2820,6 @@
                                 isRead: cols[6] ? cols[6].trim() : ''
                             };
                         });
-
-                        // FIX: Backend logic skips the first row (index 0) because it assumes headers.
-                        // If we parsed headers as data (because the sheet has no headers), we must hide row 0
-                        // to prevent "Notification not found" errors on delete.
-                        if (notificationsData.length > 0) {
-                            notificationsData.shift();
-                        }
 
                         blocks.forEach(row => {
                             const blockerId = row['Blocker ID'] || row['blockerId'];
@@ -2849,6 +2848,7 @@
 
                         const notifications = notificationsData
                             .filter(n => String(n.recipientUserId) === String(currentUserId))
+                            .filter(n => !state.deletedNotificationIds.has(n.notificationId)) // Apply local blacklist
                             .filter(n => !currentUserBlockedSet.has(n.actorUserId) && !(blockMap[n.actorUserId] && blockMap[n.actorUserId].has(currentUserId)))
                             .map(n => {
                                 const actorInfo = userMap[n.actorUserId] || { displayName: 'An unknown user', profilePictureUrl: '' };
@@ -3158,7 +3158,8 @@
                 currentFeedType: 'foryou', // 'foryou' or 'following'
                 previousView: null,
                 currentPostDetail: null,
-                freshDataLoaded: false, // Track when Apps Script refresh completes
+                freshDataLoaded: false,
+                deletedNotificationIds: new Set(), // Local blacklist for deleted notifications
                 pendingOverrides: {
                     likes: {}, // postId -> { status: true/false, timestamp: ... }
                     follows: {} // userId -> { status: true/false, timestamp: ... }
@@ -4065,7 +4066,21 @@
                 },
                 showHashtagFeed(tag) { if (state.currentView !== 'hashtagFeed') { state.feedScrollPosition = window.scrollY; } core.navigateTo('hashtagFeed'); const titleEl = document.getElementById('hashtag-title'); const feedEl = document.getElementById('hashtag-feed'); const fullHashtag = `#${tag.toLowerCase()}`; titleEl.textContent = `Posts tagged with ${fullHashtag}`; const filteredPosts = state.posts.filter(post => (post.postContent || '').toLowerCase().includes(fullHashtag)); ui.renderFeed(filteredPosts, feedEl, false); },
                 async showNotifications() { ui.toggleModal('notifications', true); ui.renderNotifications(); if (state.unreadNotificationCount > 0) { state.unreadNotificationCount = 0; core.updateNotificationDot(); try { await api.call('markNotificationsAsRead', { userId: state.currentUser.userId }); } catch (e) { console.error("Failed to mark notifications as read:", e); } } },
-                async deleteNotification(notificationId) { state.notifications = state.notifications.filter(n => n.notificationId !== notificationId); ui.renderNotifications(); try { await api.call('deleteNotification', { userId: state.currentUser.userId, notificationId }); } catch (e) { alert("Could not delete notification: " + e.message); core.refreshFeed(false); } },
+                async deleteNotification(notificationId) { 
+                    // Add to blacklist immediately so it disappears and never comes back
+                    state.deletedNotificationIds.add(notificationId);
+                    
+                    // UI Optimistic Update
+                    state.notifications = state.notifications.filter(n => n.notificationId !== notificationId); 
+                    ui.renderNotifications(); 
+                    
+                    try { 
+                        await api.call('deleteNotification', { userId: state.currentUser.userId, notificationId }); 
+                    } catch (e) { 
+                        // Even if it fails, we keep it blacklisted locally so the user doesn't see it again.
+                        console.error("Could not delete notification (likely 'first row' bug): " + e.message); 
+                    } 
+                },
                 async updatePostVisibility(e) { const newVisibility = e.target.value; const selectElement = e.target; selectElement.disabled = true; try { await api.call('updatePostVisibility', { userId: state.currentUser.userId, visibility: newVisibility }); state.currentUser.postVisibility = newVisibility; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); } catch (err) { alert('Could not update setting: ' + err.message); selectElement.value = state.currentUser.postVisibility; } finally { selectElement.disabled = false; } },
                 async updateProfilePrivacy(e) { const newPrivacy = e.target.checked ? 'private' : 'public'; const switchElement = e.target; switchElement.disabled = true; try { await api.call('updateProfilePrivacy', { userId: state.currentUser.userId, privacy: newPrivacy }); state.currentUser.profilePrivacy = newPrivacy; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); } catch (err) { alert('Could not update setting: ' + err.message); switchElement.checked = state.currentUser.profilePrivacy === 'private'; } finally { switchElement.disabled = false; } },
                 async loadMessagesView() { core.navigateTo('messages'); ui.renderMessagesPage(); },
