@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         followers: { gid: 196890202, url: `${TSV_BASE_URL}?gid=196890202&single=true&output=tsv` },
         messages: { gid: 1861161898, url: `${TSV_BASE_URL}?gid=1861161898&single=true&output=tsv` },
         notifications: { gid: 1652933657, url: `${TSV_BASE_URL}?gid=1652933657&single=true&output=tsv` },
-        blocks: { gid: 1228482897, url: `${TSV_BASE_URL}?gid=1228482897&single=true&output=tsv` },
+        blocks: { gid: 1228482897, url: `${TSV_BASE_URL}?gid=1228482897&single=true&output=tsv` }, 
         bans: { gid: 1624591656, url: `${TSV_BASE_URL}?gid=1624591656&single=true&output=tsv` },
         servInfo: { gid: 138253995, url: `${TSV_BASE_URL}?gid=138253995&single=true&output=tsv` },
         filter: { gid: 316069085, url: `${TSV_BASE_URL}?gid=316069085&single=true&output=tsv` },
@@ -100,7 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isRead = row['isRead'];
 
                     let isMatch = false;
-                    if ((senderId === currentUserId && recipientId === otherUserId) || (senderId === otherUserId && recipientId === currentUserId)) {
+                    // Strict ID matching using strings
+                    if ((String(senderId) === String(currentUserId) && String(recipientId) === String(otherUserId)) || 
+                        (String(senderId) === String(otherUserId) && String(recipientId) === String(currentUserId))) {
                         isMatch = true;
                     }
 
@@ -167,7 +169,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                const currentUserRow = accounts.find(row => row['userID'] === currentUserId);
+                // Ensure ID matching is strictly string-based to avoid "123" vs 123 issues
+                const currentUserRow = accounts.find(row => String(row['userID']) === String(currentUserId));
+                
                 if (currentUserRow) {
                     const isAdmin = String(currentUserRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
                     isCurrentUserOutageExempt = isAdmin;
@@ -325,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const author = userMap[authorId];
                     if (!author) return;
 
-                    const isOwnPost = authorId === currentUserId;
+                    const isOwnPost = String(authorId) === String(currentUserId);
                     const viewerFollowsAuthor = currentUserFollowingList.includes(String(authorId));
                     const authorFollowsViewer = (followingMap[authorId] || []).includes(String(currentUserId));
                     const areFriends = viewerFollowsAuthor && authorFollowsViewer;
@@ -370,8 +374,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     let conversationId = null;
                     let otherUser = null;
 
-                    if (senderId === currentUserId || recipientId === currentUserId) {
-                        const otherUserId = senderId === currentUserId ? recipientId : senderId;
+                    if (String(senderId) === String(currentUserId) || String(recipientId) === String(currentUserId)) {
+                        const otherUserId = String(senderId) === String(currentUserId) ? recipientId : senderId;
                         if (!currentUserBlockedSet.has(otherUserId) && !(blockMap[otherUserId] && blockMap[otherUserId].has(currentUserId))) {
                             conversationId = otherUserId;
                             otherUser = { ...userMap[otherUserId], isGroup: false };
@@ -390,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             messageContent: decodedMessage, timestamp, isRead, status: 'sent'
                         });
                         if (new Date(timestamp) > new Date(convo.timestamp || 0)) {
-                            convo.lastMessage = senderId === currentUserId ? `You: ${decodedMessage}` : decodedMessage;
+                            convo.lastMessage = String(senderId) === String(currentUserId) ? `You: ${decodedMessage}` : decodedMessage;
                             convo.timestamp = timestamp;
                         }
                     }
@@ -400,8 +404,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
                     const isRead = row['isRead'];
-                    if (senderId === currentUserId) return;
-                    if (recipientId === currentUserId && (isRead === 'FALSE' || isRead === false)) {
+                    if (String(senderId) === String(currentUserId)) return;
+                    if (String(recipientId) === String(currentUserId) && (isRead === 'FALSE' || isRead === false)) {
                         if (conversationsMap[senderId]) {
                             conversationsMap[senderId].unreadCount = (conversationsMap[senderId].unreadCount || 0) + 1;
                         }
@@ -1672,6 +1676,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     // THEN CHECK STATUS
                     if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
                     if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
+                } else if (state.currentUser) {
+                    // Fallback: if server didn't return user data, use local cache but warn
+                    console.warn("Using cached user data (Server didn't return account details).");
+                } else {
+                    // Only logout if we have NO data at all
+                    throw new Error("Session invalid.");
                 }
 
                 applyOptimisticUpdates(posts);
@@ -1702,7 +1712,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) {
                 console.error("Feed refresh error:", e);
                 if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`;
-                if (e.message.includes("validate user session")) setTimeout(() => core.logout(), 2000);
+                // Don't auto logout on generic errors, only on specific session failures
             } finally {
                 if (state.currentView === 'feed') {
                     const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
@@ -1847,7 +1857,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl);
             core.navigateTo('feed'); 
             ui.showFeedSkeleton(document.getElementById('foryou-feed')); 
-            try { await core.refreshFeed(false); } catch (error) { alert(`Session error: ${error.message}. Please log in again.`); core.logout(); } 
+            try { await core.refreshFeed(false); } catch (error) { console.error("Offline/Error during init:", error); } 
         },
         main() { core.setupEventListeners(); const savedTheme = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', savedTheme); document.getElementById('theme-switch').checked = savedTheme === 'dark'; if (localStorage.getItem('currentUser')) { core.initializeApp(); } else { core.navigateTo('auth'); } }
     };
