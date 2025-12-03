@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Ensure ID matching is strictly string-based to avoid "123" vs 123 issues
+                // FIX: Strict String Comparison for IDs
                 const currentUserRow = accounts.find(row => String(row['userID']) === String(currentUserId));
                 
                 if (currentUserRow) {
@@ -1663,8 +1663,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (bannerText) { banner.textContent = bannerText; banner.classList.remove('hidden'); setTimeout(() => root.style.setProperty('--banner-height', `${banner.offsetHeight}px`), 0); }
                 else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
+                // === FIX: SESSION PERSISTENCE LOGIC ===
                 if (currentUserData) {
-                    // SAVE USER SESSION FIRST
+                    // Normal flow: Server returned user data
                     state.currentUser = currentUserData;
                     state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
@@ -1673,14 +1674,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
 
-                    // THEN CHECK STATUS
+                    // Handle Ban/Outage *AFTER* ensuring session is saved
                     if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
                     if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
                 } else if (state.currentUser) {
-                    // Fallback: if server didn't return user data, use local cache but warn
-                    console.warn("Using cached user data (Server didn't return account details).");
+                    // Fallback: Server didn't return user data (network glitch?), KEEP LOGGED IN
+                    console.warn("Server didn't return user row, keeping local session active.");
                 } else {
-                    // Only logout if we have NO data at all
+                    // Only error out if we have absolutely no user data
                     throw new Error("Session invalid.");
                 }
 
@@ -1711,8 +1712,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
             } catch (e) {
                 console.error("Feed refresh error:", e);
-                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`;
-                // Don't auto logout on generic errors, only on specific session failures
+                // === FIX: DO NOT LOG OUT ON GENERIC ERRORS ===
+                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed. Trying again...</p>`;
             } finally {
                 if (state.currentView === 'feed') {
                     const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
@@ -1857,6 +1858,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl);
             core.navigateTo('feed'); 
             ui.showFeedSkeleton(document.getElementById('foryou-feed')); 
+            // --- FIX: NEVER LOG OUT ON INIT ERROR, JUST WARN ---
             try { await core.refreshFeed(false); } catch (error) { console.error("Offline/Error during init:", error); } 
         },
         main() { core.setupEventListeners(); const savedTheme = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', savedTheme); document.getElementById('theme-switch').checked = savedTheme === 'dark'; if (localStorage.getItem('currentUser')) { core.initializeApp(); } else { core.navigateTo('auth'); } }
