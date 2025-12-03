@@ -172,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     isCurrentUserOutageExempt = isAdmin;
                 }
 
+                // If Outage, just return empty data, DO NOT force logout in getter
                 if (isOutage && !isCurrentUserOutageExempt) {
                     return {
                         posts: [], conversations: [], currentUserFollowingList: [], currentUserFollowersList: [], blockedUsersList: [],
@@ -179,6 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
+                // Build Maps
                 const now = new Date();
                 const banMap = {};
                 bans.forEach(row => {
@@ -1650,10 +1652,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (bannerText) { banner.textContent = bannerText; banner.classList.remove('hidden'); setTimeout(() => root.style.setProperty('--banner-height', `${banner.offsetHeight}px`), 0); }
                 else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
-                let pendingBan = null; // STORE BAN STATE
-
+                // === FIX: SESSION PERSISTENCE LOGIC ===
                 if (currentUserData) {
-                    // 1. SAVE SESSION FIRST (Crucial)
+                    // Normal flow: Server returned user data
                     state.currentUser = currentUserData;
                     state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
@@ -1662,14 +1663,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
 
-                    // 2. Check Ban but DON'T redirect yet
+                    // Handle Ban/Outage *AFTER* ensuring session is saved
                     if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
-                    if (currentUserData.banDetails) {
-                        pendingBan = currentUserData.banDetails;
-                    }
+                    if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
                 } else if (state.currentUser) {
-                    console.warn("Using cached user data...");
+                    // Fallback: Server didn't return user data (network glitch?), KEEP LOGGED IN
+                    console.warn("Server didn't return user row, keeping local session active.");
                 } else {
+                    // Only error out if we have absolutely no user data
                     throw new Error("Session invalid.");
                 }
 
@@ -1698,19 +1699,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.freshDataLoaded = true;
                 const messagesNavBtn = document.getElementById('messages-btn');
                 if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
-
-                // 3. NOW TRIGGER THE BAN TRAP (After UI is ready)
-                if (pendingBan) {
-                    setTimeout(() => {
-                        ui.renderBanPage(pendingBan);
-                        core.navigateTo('suspended');
-                    }, 500); 
-                }
-
             } catch (e) {
                 console.error("Feed refresh error:", e);
-                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`;
-                // Removed the auto-logout on error here
+                // === FIX: DO NOT LOG OUT ON GENERIC ERRORS ===
+                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed. Trying again...</p>`;
             } finally {
                 if (state.currentView === 'feed') {
                     const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
@@ -1855,6 +1847,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl);
             core.navigateTo('feed'); 
             ui.showFeedSkeleton(document.getElementById('foryou-feed')); 
+            // --- FIX: NEVER LOG OUT ON INIT ERROR, JUST WARN ---
             try { await core.refreshFeed(false); } catch (error) { console.error("Offline/Error during init:", error); } 
         },
         main() { core.setupEventListeners(); const savedTheme = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', savedTheme); document.getElementById('theme-switch').checked = savedTheme === 'dark'; if (localStorage.getItem('currentUser')) { core.initializeApp(); } else { core.navigateTo('auth'); } }
