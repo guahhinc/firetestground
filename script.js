@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         followers: { gid: 196890202, url: `${TSV_BASE_URL}?gid=196890202&single=true&output=tsv` },
         messages: { gid: 1861161898, url: `${TSV_BASE_URL}?gid=1861161898&single=true&output=tsv` },
         notifications: { gid: 1652933657, url: `${TSV_BASE_URL}?gid=1652933657&single=true&output=tsv` },
-        blocks: { gid: 1228482897, url: `${TSV_BASE_URL}?gid=1228482897&single=true&output=tsv` }, 
+        blocks: { gid: 1228482897, url: `${TSV_BASE_URL}?gid=1228482897&single=true&output=tsv` },
         bans: { gid: 1624591656, url: `${TSV_BASE_URL}?gid=1624591656&single=true&output=tsv` },
         servInfo: { gid: 138253995, url: `${TSV_BASE_URL}?gid=138253995&single=true&output=tsv` },
         filter: { gid: 316069085, url: `${TSV_BASE_URL}?gid=316069085&single=true&output=tsv` },
@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const lines = tsvText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
 
+            // TRIM HEADERS to fix "invisible space" issues in Google Sheets
             const headers = lines[0].split('\t').map(h => h.trim());
             const data = [];
 
@@ -64,16 +65,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Helper: Get column value case-insensitively (Fixes "Invalid Date" and "Privacy" bugs)
     const getColumn = (row, ...keys) => {
         for (const key of keys) {
             if (row[key] !== undefined && row[key] !== '') return row[key];
+            // Case-insensitive check
             const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
             if (foundKey) return row[foundKey];
         }
         return undefined;
     };
 
-    // ===== Data Aggregation =====
+    // ===== Data Aggregation (client-side logic) =====
     const dataAggregator = {
         async getConversationHistory({ userId, otherUserId }) {
             try {
@@ -152,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tsvParser.fetchSheet('photoLibrary')
                 ]);
 
+                // Server Status Check
                 let isOutage = false;
                 let bannerText = '';
                 let isCurrentUserOutageExempt = false;
@@ -165,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
+                // Fix: Strict String Comparison for IDs
                 const currentUserRow = accounts.find(row => String(row['userID']) === String(currentUserId));
                 
                 if (currentUserRow) {
@@ -172,11 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     isCurrentUserOutageExempt = isAdmin;
                 }
 
-                // If Outage, just return empty data, DO NOT force logout in getter
                 if (isOutage && !isCurrentUserOutageExempt) {
                     return {
-                        posts: [], conversations: [], currentUserFollowingList: [], currentUserFollowersList: [], blockedUsersList: [],
-                        currentUserData: { isSuspended: 'OUTAGE' }, bannerText
+                        posts: [],
+                        conversations: [],
+                        currentUserFollowingList: [],
+                        currentUserFollowersList: [],
+                        blockedUsersList: [],
+                        currentUserData: { isSuspended: 'OUTAGE' },
+                        bannerText
                     };
                 }
 
@@ -216,6 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     likesByPostMap[postId].push({ likeId, userId });
                 });
 
+                // Build comments map (FIXED TIMESTAMP PARSING)
                 const commentsByPostMap = {};
                 comments.forEach(row => {
                     const commentId = row['commentID'];
@@ -224,12 +234,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const postId = row['postID'];
                     const userId = row['userID'];
                     const commentText = row['commentText'];
+                    
+                    // Robust Timestamp Check using helper
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
 
                     if (!commentsByPostMap[postId]) commentsByPostMap[postId] = [];
                     commentsByPostMap[postId].push({ commentId, postId, userId, commentText, timestamp });
                 });
 
+                // Build following/followers maps
                 const followingMap = {};
                 const followersMap = {};
                 followers.forEach(row => {
@@ -241,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     followersMap[followingId].push(String(followerId));
                 });
 
+                // Build posts by user map
                 const postsByUserMap = {};
                 postsData.forEach(row => {
                     const postId = row['postID'];
@@ -250,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     postsByUserMap[userId].push(postId);
                 });
 
+                // Build user map
                 const userMap = {};
                 accounts.forEach(row => {
                     const userId = row['userID'] || row['userId'];
@@ -260,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isVerified = row['isVerified'] || 'FALSE';
                     const postVisibility = row['firePostVisibility'] || 'Everyone';
                     
+                    // ROBUST PRIVACY CHECK
                     let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
                     const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
 
@@ -282,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 });
 
+                // Get current user data
                 const currentUserBlockedSet = blockMap[currentUserId] || new Set();
                 const currentUserFollowingList = followingMap[String(currentUserId)] || [];
                 const currentUserFollowersList = followersMap[String(currentUserId)] || [];
@@ -290,6 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return user ? { userId: user.userId, displayName: user.displayName, profilePictureUrl: user.profilePictureUrl } : null;
                 }).filter(Boolean);
 
+                // Build post map
                 const postMap = {};
                 postsData.forEach(row => {
                     const postId = row['postID'];
@@ -303,6 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     postMap[postId] = { postId, authorId, postContent, timestamp, isStory, expiryTimestamp, storyDuration };
                 });
 
+                // Merge Local Pending Posts
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const now = Date.now();
                     state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
@@ -311,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
+                // Build feed items
                 const feedItems = {};
                 Object.values(postMap).forEach(post => {
                     const authorId = post.authorId;
@@ -348,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return { ...author, ...item, comments: postComments, likes: postLikes, reposts: [] };
                 }).filter(Boolean);
 
+                // Build conversations
                 const conversationsMap = {};
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
@@ -1642,38 +1663,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.showFeedSkeleton(activeFeedEl);
             }
             try {
+                // 1. Fetch Data (Both posts and notifications)
                 const [postsAndConvosResult, notificationsResult] = await Promise.all([
                     api.call('getPosts', { userId: state.currentUser.userId }, 'GET'),
                     api.call('getNotifications', { userId: state.currentUser.userId }, 'GET')
                 ]);
+
+                // Destructure results
                 const { posts = [], conversations = [], currentUserFollowingList = [], currentUserFollowersList = [], blockedUsersList = [], currentUserData = null, bannerText = '', photoLibrary = [] } = postsAndConvosResult || {};
+                
+                // Set Banner
                 const banner = document.getElementById('global-banner');
                 const root = document.documentElement;
                 if (bannerText) { banner.textContent = bannerText; banner.classList.remove('hidden'); setTimeout(() => root.style.setProperty('--banner-height', `${banner.offsetHeight}px`), 0); }
                 else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
-                // === FIX: SESSION PERSISTENCE LOGIC ===
+                // --- CRITICAL FIX: SAVE SESSION FIRST ---
                 if (currentUserData) {
-                    // Normal flow: Server returned user data
                     state.currentUser = currentUserData;
                     state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
                     
+                    // Update Nav PFP
                     const navPfp = document.getElementById('nav-pfp');
                     if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
-
-                    // Handle Ban/Outage *AFTER* ensuring session is saved
-                    if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
-                    if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
                 } else if (state.currentUser) {
-                    // Fallback: Server didn't return user data (network glitch?), KEEP LOGGED IN
-                    console.warn("Server didn't return user row, keeping local session active.");
+                    console.warn("Using cached user data (Server didn't return account details).");
                 } else {
-                    // Only error out if we have absolutely no user data
                     throw new Error("Session invalid.");
                 }
 
+                // 2. Update State with new Data
                 applyOptimisticUpdates(posts);
 
                 let combinedPosts = [...posts];
@@ -1699,18 +1720,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.freshDataLoaded = true;
                 const messagesNavBtn = document.getElementById('messages-btn');
                 if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
-            } catch (e) {
-                console.error("Feed refresh error:", e);
-                // === FIX: DO NOT LOG OUT ON GENERIC ERRORS ===
-                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed. Trying again...</p>`;
-            } finally {
+
+                // 3. Render UI Normally
                 if (state.currentView === 'feed') {
                     const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
                     ui.renderFeed(state.posts, activeFeedEl, true);
                     const inactiveFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('following-feed') : document.getElementById('foryou-feed');
                     inactiveFeedEl.innerHTML = '';
-                } else if (['profile', 'hashtagFeed', 'messages', 'settings', 'search', 'createPost', 'postDetail'].includes(state.currentView)) ui.render();
-            }
+                } else if (['profile', 'hashtagFeed', 'messages', 'settings', 'search', 'createPost', 'postDetail'].includes(state.currentView)) {
+                    ui.render();
+                }
+
+                // 4. AFTER RENDER: Check for Ban/Outage and Redirect if needed (Trap Logic)
+                if (currentUserData) {
+                    if (currentUserData.isSuspended === 'OUTAGE') { 
+                        core.logout(false); 
+                        core.navigateTo('outage'); 
+                        return; 
+                    }
+                    if (currentUserData.banDetails) { 
+                        setTimeout(() => {
+                            ui.renderBanPage(currentUserData.banDetails); 
+                            core.navigateTo('suspended'); 
+                        }, 500); // Small delay to allow UI to "settle" first
+                        return; 
+                    }
+                }
+
+            } catch (e) {
+                console.error("Feed refresh error:", e);
+                // NO LOGOUT HERE - Just show error on feed
+                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed. Checking connection...</p>`;
+            } 
         },
         updateNotificationDot() { document.getElementById('notification-dot').style.display = state.unreadNotificationCount > 0 ? 'block' : 'none'; },
         updateMessageDot() { const hasUnread = state.conversations.some(c => c.unreadCount > 0); document.getElementById('message-dot').style.display = hasUnread ? 'block' : 'none'; },
@@ -1869,6 +1910,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (daysAgo <= 14) return `${daysAgo}d ago`;
         return date.toLocaleDateString('en-us', { month: 'short', day: 'numeric' });
     };
-    const sanitizeHTML = (str) => { if (!str) return ''; const temp = document.createElement('div'); temp.textContent = str; return temp.innerHTML; };
+    const sanitizeHTML = (str) => { if (!str) return ''; const temp = document.createElement('div'); temp.textContent = str || ''; return temp.innerHTML; };
     core.main();
 });
