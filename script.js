@@ -1704,7 +1704,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
             } catch (e) {
                 console.error("Feed refresh error:", e);
+                // --- FIX: Check if it is a ban error inside the refresh loop ---
+                if (e.message === 'ACCOUNT_BANNED' || e.banDetails) {
+                    const banInfo = e.banDetails || { reason: 'Account Banned', endDate: 'permanent' };
+                    ui.renderBanPage(banInfo);
+                    core.navigateTo('suspended');
+                    return; // Stop here, do not logout
+                }
+                
                 if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`;
+                
+                // Only logout if it is explicitly a validation/session error, NOT a ban error
                 if (e.message.includes("validate user session")) setTimeout(() => core.logout(), 2000);
             } finally {
                 if (state.currentView === 'feed') {
@@ -1853,12 +1863,11 @@ document.addEventListener('DOMContentLoaded', () => {
             try { 
                 await core.refreshFeed(false); 
             } catch (error) { 
-                // Fix: Check if it's a ban error before logging out
                 if (error.message === 'ACCOUNT_BANNED' || error.banDetails) {
                     const banInfo = error.banDetails || { reason: 'Account Banned', endDate: 'permanent' };
                     ui.renderBanPage(banInfo);
                     core.navigateTo('suspended');
-                    return; // Do NOT logout
+                    return; 
                 }
                 
                 alert(`Session error: ${error.message}. Please log in again.`); 
