@@ -27,11 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!tsvText || tsvText.trim() === '') return [];
             const lines = tsvText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
-
-            // TRIM HEADERS to fix "invisible space" issues in Google Sheets
             const headers = lines[0].split('\t').map(h => h.trim());
             const data = [];
-
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split('\t');
                 const row = {};
@@ -42,56 +39,41 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return data;
         },
-
         async fetchSheet(sheetKey) {
             const sheet = TSV_SHEETS[sheetKey];
             if (!sheet) throw new Error(`Unknown sheet: ${sheetKey}`);
-
             const response = await fetch(sheet.url + '&cachebust=' + Date.now());
             if (!response.ok) throw new Error(`Failed to fetch ${sheetKey}: ${response.status}`);
             const text = await response.text();
             return this.parse(text);
         },
-
         async fetchAllSheets() {
             const sheetKeys = Object.keys(TSV_SHEETS);
             const results = await Promise.all(sheetKeys.map(key => this.fetchSheet(key)));
-
             const data = {};
-            sheetKeys.forEach((key, index) => {
-                data[key] = results[index];
-            });
+            sheetKeys.forEach((key, index) => { data[key] = results[index]; });
             return data;
         }
     };
 
-    // Helper: Get column value case-insensitively (Fixes "Invalid Date" and "Privacy" bugs)
     const getColumn = (row, ...keys) => {
         for (const key of keys) {
             if (row[key] !== undefined && row[key] !== '') return row[key];
-            // Case-insensitive check
             const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
             if (foundKey) return row[foundKey];
         }
         return undefined;
     };
 
-    // ===== Data Aggregation (client-side logic) =====
+    // ===== Data Aggregator =====
     const dataAggregator = {
         async getConversationHistory({ userId, otherUserId }) {
             try {
-                const [messagesData, accounts] = await Promise.all([
-                    tsvParser.fetchSheet('messages'),
-                    tsvParser.fetchSheet('accounts')
-                ]);
+                const [messagesData, accounts] = await Promise.all([tsvParser.fetchSheet('messages'), tsvParser.fetchSheet('accounts')]);
                 const messages = [];
                 const currentUserId = userId;
-
                 const userMap = {};
-                accounts.forEach(row => {
-                    userMap[row['userID']] = row;
-                });
-
+                accounts.forEach(row => { userMap[row['userID']] = row; });
                 messagesData.forEach(row => {
                     const msgId = row['messageID'] || row['messageId'];
                     const senderId = row['senderID'] || row['senderId'];
@@ -99,108 +81,47 @@ document.addEventListener('DOMContentLoaded', () => {
                     const encodedContent = row['messageContent'];
                     const timestamp = row['timestamp'];
                     const isRead = row['isRead'];
-
-                    let isMatch = false;
                     if ((senderId === currentUserId && recipientId === otherUserId) || (senderId === otherUserId && recipientId === currentUserId)) {
-                        isMatch = true;
-                    }
-
-                    if (isMatch) {
                         let decodedMessage = '';
-                        try {
-                            decodedMessage = atob(encodedContent);
-                        } catch (e) {
-                            decodedMessage = 'Could not decode message.';
-                        }
-
-                        messages.push({
-                            messageId: msgId,
-                            senderId: senderId,
-                            senderName: userMap[senderId]?.displayName || 'Unknown',
-                            messageContent: decodedMessage,
-                            timestamp: timestamp,
-                            isRead: isRead,
-                            status: 'sent'
-                        });
+                        try { decodedMessage = atob(encodedContent); } catch (e) { decodedMessage = 'Could not decode message.'; }
+                        messages.push({ messageId: msgId, senderId, senderName: userMap[senderId]?.displayName || 'Unknown', messageContent: decodedMessage, timestamp, isRead, status: 'sent' });
                     }
                 });
-
                 messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
                 return { messages };
-            } catch (error) {
-                console.error('Error in getConversationHistory TSV:', error);
-                throw error;
-            }
+            } catch (error) { console.error('Error in getConversationHistory TSV:', error); throw error; }
         },
         async getPosts(params) {
             try {
                 const currentUserId = params.userId || params;
-                
-                const [
-                    servInfo, bans, blocks, accounts, postsData,
-                    comments, likes, followers, messages, groupLastRead, photoLibrary
-                ] = await Promise.all([
-                    tsvParser.fetchSheet('servInfo'),
-                    tsvParser.fetchSheet('bans'),
-                    tsvParser.fetchSheet('blocks'),
-                    tsvParser.fetchSheet('accounts'),
-                    tsvParser.fetchSheet('posts'),
-                    tsvParser.fetchSheet('comments'),
-                    tsvParser.fetchSheet('likes'),
-                    tsvParser.fetchSheet('followers'),
-                    tsvParser.fetchSheet('messages'),
-                    tsvParser.fetchSheet('groupLastRead'),
-                    tsvParser.fetchSheet('photoLibrary')
+                const [servInfo, bans, blocks, accounts, postsData, comments, likes, followers, messages, groupLastRead, photoLibrary] = await Promise.all([
+                    tsvParser.fetchSheet('servInfo'), tsvParser.fetchSheet('bans'), tsvParser.fetchSheet('blocks'), tsvParser.fetchSheet('accounts'),
+                    tsvParser.fetchSheet('posts'), tsvParser.fetchSheet('comments'), tsvParser.fetchSheet('likes'), tsvParser.fetchSheet('followers'),
+                    tsvParser.fetchSheet('messages'), tsvParser.fetchSheet('groupLastRead'), tsvParser.fetchSheet('photoLibrary')
                 ]);
 
-                // Server Status Check
-                let isOutage = false;
-                let bannerText = '';
-                let isCurrentUserOutageExempt = false;
-
+                // Server Outage Check
+                let isOutage = false; let bannerText = ''; let isCurrentUserOutageExempt = false;
                 if (servInfo && servInfo.length > 0) {
                     const servInfoRow = servInfo[0];
                     bannerText = servInfoRow['bannerText'] || '';
-                    const serverStatus = servInfoRow['serverStatus'] || '';
-                    if (String(serverStatus).toLowerCase() === 'outage') {
-                        isOutage = true;
-                    }
+                    if (String(servInfoRow['serverStatus']).toLowerCase() === 'outage') isOutage = true;
                 }
-
                 const currentUserRow = accounts.find(row => row['userID'] === currentUserId);
-                if (currentUserRow) {
-                    const isAdmin = String(currentUserRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
-                    isCurrentUserOutageExempt = isAdmin;
-                }
+                if (currentUserRow && String(currentUserRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE') isCurrentUserOutageExempt = true;
+                if (isOutage && !isCurrentUserOutageExempt) return { posts: [], conversations: [], currentUserFollowingList: [], currentUserFollowersList: [], blockedUsersList: [], currentUserData: { isSuspended: 'OUTAGE' }, bannerText };
 
-                if (isOutage && !isCurrentUserOutageExempt) {
-                    return {
-                        posts: [],
-                        conversations: [],
-                        currentUserFollowingList: [],
-                        currentUserFollowersList: [],
-                        blockedUsersList: [],
-                        currentUserData: { isSuspended: 'OUTAGE' },
-                        bannerText
-                    };
-                }
-
-                // Build Maps
+                // Ban Check
                 const now = new Date();
                 const banMap = {};
                 bans.forEach(row => {
                     const username = row['username'];
-                    const reason = row['reason'];
                     const endDateStr = row['endDate'];
                     if (username) {
-                        if (!endDateStr) {
-                            banMap[username] = { reason, endDate: 'permanent' };
-                        } else {
+                        if (!endDateStr) banMap[username] = { reason: row['reason'], endDate: 'permanent' };
+                        else {
                             const endDate = new Date(endDateStr);
-                            if (!isNaN(endDate.getTime()) && endDate > now) {
-                                banMap[username] = { reason, endDate: endDate.toISOString() };
-                            }
+                            if (!isNaN(endDate.getTime()) && endDate > now) banMap[username] = { reason: row['reason'], endDate: endDate.toISOString() };
                         }
                     }
                 });
@@ -216,31 +137,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const likesByPostMap = {};
                 likes.forEach(row => {
                     const postId = row['postID'];
-                    const likeId = row['likeID'];
-                    const userId = row['userID'];
                     if (!likesByPostMap[postId]) likesByPostMap[postId] = [];
-                    likesByPostMap[postId].push({ likeId, userId });
+                    likesByPostMap[postId].push({ likeId: row['likeID'], userId: row['userID'] });
                 });
 
-                // --- FIX: Robust Timestamp Parsing for Comments ---
                 const commentsByPostMap = {};
                 comments.forEach(row => {
                     const commentId = row['commentID'];
                     if (state.deletedCommentIds.has(commentId)) return;
-
                     const postId = row['postID'];
-                    const userId = row['userID'];
-                    const commentText = row['commentText'];
-                    
-                    // Try multiple variations of the header to find the date
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
-
                     if (!commentsByPostMap[postId]) commentsByPostMap[postId] = [];
-                    commentsByPostMap[postId].push({ commentId, postId, userId, commentText, timestamp });
+                    commentsByPostMap[postId].push({ commentId, postId, userId: row['userID'], commentText: row['commentText'], timestamp });
                 });
 
-                const followingMap = {};
-                const followersMap = {};
+                const followingMap = {}; const followersMap = {};
                 followers.forEach(row => {
                     const followerId = row['followerID'] || row['followerId'] || row['Follower ID'];
                     const followingId = row['followingID'] || row['followingId'] || row['Following ID'];
@@ -263,32 +174,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 accounts.forEach(row => {
                     const userId = row['userID'] || row['userId'];
                     const username = row['username'];
-                    const displayName = row['displayName'];
-                    const profilePictureUrl = row['profilePictureUrl'] || '';
-                    const description = row['description'] || '';
-                    const isVerified = row['isVerified'] || 'FALSE';
-                    const postVisibility = row['firePostVisibility'] || 'Everyone';
-                    
-                    // --- FIX: Robust Privacy Column Check ---
-                    let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
-                    const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
-
-                    const isAdmin = String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
-
+                    const banDetails = banMap[username] || null;
                     const userPostIds = postsByUserMap[userId] || [];
                     let totalLikes = 0;
-                    userPostIds.forEach(postId => {
-                        totalLikes += (likesByPostMap[postId] || []).length;
-                    });
-
-                    const banDetails = banMap[username] || null;
-
+                    userPostIds.forEach(postId => { totalLikes += (likesByPostMap[postId] || []).length; });
+                    let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
                     userMap[userId] = {
-                        userId, username, displayName, profilePictureUrl, description,
-                        isVerified, banDetails, postVisibility, profilePrivacy,
-                        followers: (followersMap[userId] || []).length,
-                        following: (followingMap[userId] || []).length,
-                        totalLikes, isAdmin
+                        userId, username, displayName: row['displayName'], profilePictureUrl: row['profilePictureUrl'] || '', description: row['description'] || '',
+                        isVerified: row['isVerified'] || 'FALSE', banDetails, postVisibility: row['firePostVisibility'] || 'Everyone',
+                        profilePrivacy: String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public',
+                        followers: (followersMap[userId] || []).length, following: (followingMap[userId] || []).length, totalLikes,
+                        isAdmin: String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE'
                     };
                 });
 
@@ -304,37 +200,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 postsData.forEach(row => {
                     const postId = row['postID'];
                     if (state.deletedPostIds.has(postId)) return;
-                    const authorId = row['userID'];
-                    const postContent = row['postContent'];
-                    const timestamp = row['timestamp'];
-                    const isStory = String(row['story'] || 'FALSE').toUpperCase() === 'TRUE';
-                    const expiryTimestamp = row['expiryTimestamp'];
-                    const storyDuration = row['storyDuration'];
-                    postMap[postId] = { postId, authorId, postContent, timestamp, isStory, expiryTimestamp, storyDuration };
+                    postMap[postId] = { postId, authorId: row['userID'], postContent: row['postContent'], timestamp: row['timestamp'], isStory: String(row['story'] || 'FALSE').toUpperCase() === 'TRUE', expiryTimestamp: row['expiryTimestamp'], storyDuration: row['storyDuration'] };
                 });
 
-                // Merge Local Pending Posts
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const now = Date.now();
                     state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
-                    state.localPendingPosts.forEach(localPost => {
-                        if (!postMap[localPost.postId]) postMap[localPost.postId] = localPost;
-                    });
+                    state.localPendingPosts.forEach(localPost => { if (!postMap[localPost.postId]) postMap[localPost.postId] = localPost; });
                 }
 
-                // Filter Feed Items
                 const feedItems = {};
                 Object.values(postMap).forEach(post => {
                     const authorId = post.authorId;
                     if (currentUserBlockedSet.has(authorId) || (blockMap[authorId] && blockMap[authorId].has(currentUserId))) return;
                     const author = userMap[authorId];
                     if (!author) return;
-
                     const isOwnPost = authorId === currentUserId;
                     const viewerFollowsAuthor = currentUserFollowingList.includes(String(authorId));
                     const authorFollowsViewer = (followingMap[authorId] || []).includes(String(currentUserId));
                     const areFriends = viewerFollowsAuthor && authorFollowsViewer;
-
                     let canView = false;
                     if (isOwnPost) canView = true;
                     else if (author.profilePrivacy === 'private') canView = areFriends;
@@ -352,313 +236,146 @@ document.addEventListener('DOMContentLoaded', () => {
                 const posts = Object.values(feedItems).map(item => {
                     const author = userMap[item.authorId];
                     if (!author || author.banDetails) return null;
-                    const postCommentsRaw = commentsByPostMap[item.postId] || [];
-                    const postComments = postCommentsRaw
+                    const postComments = (commentsByPostMap[item.postId] || [])
                         .filter(c => !currentUserBlockedSet.has(c.userId) && !(blockMap[c.userId] && blockMap[c.userId].has(currentUserId)))
                         .map(c => ({ ...c, ...(userMap[c.userId] || {}) }));
-                    const postLikes = likesByPostMap[item.postId] || [];
-                    return { ...author, ...item, comments: postComments, likes: postLikes, reposts: [] };
+                    return { ...author, ...item, comments: postComments, likes: likesByPostMap[item.postId] || [], reposts: [] };
                 }).filter(Boolean);
 
                 const conversationsMap = {};
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
-                    const messageId = row['messageID'] || row['messageId'];
-                    const encodedContent = row['messageContent'];
-                    const timestamp = row['timestamp'];
-                    const isRead = row['isRead'];
-
                     let decodedMessage = '';
-                    try { decodedMessage = atob(encodedContent); } catch (e) { decodedMessage = 'Could not decode message.'; }
-
-                    let conversationId = null;
-                    let otherUser = null;
-
+                    try { decodedMessage = atob(row['messageContent']); } catch (e) { decodedMessage = 'Could not decode message.'; }
                     if (senderId === currentUserId || recipientId === currentUserId) {
                         const otherUserId = senderId === currentUserId ? recipientId : senderId;
                         if (!currentUserBlockedSet.has(otherUserId) && !(blockMap[otherUserId] && blockMap[otherUserId].has(currentUserId))) {
-                            conversationId = otherUserId;
-                            otherUser = { ...userMap[otherUserId], isGroup: false };
-                        }
-                    }
-
-                    if (conversationId && otherUser) {
-                        if (!conversationsMap[conversationId]) {
-                            conversationsMap[conversationId] = {
-                                otherUser: otherUser, lastMessage: '', timestamp: '', unreadCount: 0, messages: []
-                            };
-                        }
-                        const convo = conversationsMap[conversationId];
-                        convo.messages.push({
-                            messageId, senderId, senderName: userMap[senderId]?.displayName || 'Unknown',
-                            messageContent: decodedMessage, timestamp, isRead, status: 'sent'
-                        });
-                        if (new Date(timestamp) > new Date(convo.timestamp || 0)) {
-                            convo.lastMessage = senderId === currentUserId ? `You: ${decodedMessage}` : decodedMessage;
-                            convo.timestamp = timestamp;
+                            if (!conversationsMap[otherUserId]) conversationsMap[otherUserId] = { otherUser: { ...userMap[otherUserId], isGroup: false }, lastMessage: '', timestamp: '', unreadCount: 0, messages: [] };
+                            conversationsMap[otherUserId].messages.push({ messageId: row['messageID'], senderId, senderName: userMap[senderId]?.displayName || 'Unknown', messageContent: decodedMessage, timestamp: row['timestamp'], isRead: row['isRead'], status: 'sent' });
+                            if (new Date(row['timestamp']) > new Date(conversationsMap[otherUserId].timestamp || 0)) {
+                                conversationsMap[otherUserId].lastMessage = senderId === currentUserId ? `You: ${decodedMessage}` : decodedMessage;
+                                conversationsMap[otherUserId].timestamp = row['timestamp'];
+                            }
                         }
                     }
                 });
-
-                // Calculate unread counts
+                
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
                     const isRead = row['isRead'];
-                    if (senderId === currentUserId) return;
-                    if (recipientId === currentUserId && (isRead === 'FALSE' || isRead === false)) {
-                        if (conversationsMap[senderId]) {
-                            conversationsMap[senderId].unreadCount = (conversationsMap[senderId].unreadCount || 0) + 1;
-                        }
+                    if (senderId !== currentUserId && recipientId === currentUserId && (isRead === 'FALSE' || isRead === false)) {
+                        if (conversationsMap[senderId]) conversationsMap[senderId].unreadCount = (conversationsMap[senderId].unreadCount || 0) + 1;
                     }
                 });
 
-                Object.values(conversationsMap).forEach(c => {
-                    c.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                });
+                Object.values(conversationsMap).forEach(c => c.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
                 const conversations = Object.values(conversationsMap).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
+                
                 const libraryImages = [];
-                if (photoLibrary) {
-                    photoLibrary.forEach(row => {
-                        const url = row['url'] || row['URL'] || Object.values(row)[0];
-                        if (url && url.startsWith('http')) libraryImages.push(url);
-                    });
-                }
+                if (photoLibrary) { photoLibrary.forEach(row => { const url = row['url'] || row['URL'] || Object.values(row)[0]; if (url && url.startsWith('http')) libraryImages.push(url); }); }
 
-                return {
-                    posts: posts.sort((a, b) => new Date(b.sortTimestamp) - new Date(a.sortTimestamp)),
-                    conversations,
-                    currentUserFollowingList,
-                    currentUserFollowersList,
-                    blockedUsersList,
-                    currentUserData: userMap[currentUserId] || null,
-                    bannerText,
-                    photoLibrary: libraryImages
-                };
-            } catch (error) {
-                console.error('Error in getPosts:', error);
-                throw error;
-            }
+                return { posts: posts.sort((a, b) => new Date(b.sortTimestamp) - new Date(a.sortTimestamp)), conversations, currentUserFollowingList, currentUserFollowersList, blockedUsersList, currentUserData: userMap[currentUserId] || null, bannerText, photoLibrary: libraryImages };
+            } catch (error) { console.error('Error in getPosts:', error); throw error; }
         },
-
         async getNotifications(params) {
             try {
                 const currentUserId = params.userId || params;
-                const notifSheet = TSV_SHEETS.notifications;
-                const notifResponse = await fetch(notifSheet.url + '&cachebust=' + Date.now());
-                const notifText = await notifResponse.text();
-                const [blocks, accounts, postsData] = await Promise.all([
-                    tsvParser.fetchSheet('blocks'), tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('posts')
+                const [notifResponse, blocks, accounts, postsData] = await Promise.all([
+                    fetch(TSV_SHEETS.notifications.url + '&cachebust=' + Date.now()), tsvParser.fetchSheet('blocks'), tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('posts')
                 ]);
+                const notifText = await notifResponse.text();
                 const blockMap = {};
                 const lines = notifText.split('\n').filter(line => line.trim() !== '');
                 if (lines.length > 0) lines.shift();
-
                 const notificationsData = lines.map(line => {
                     const cols = line.split('\t');
-                    return {
-                        notificationId: cols[0] ? cols[0].trim() : '',
-                        recipientUserId: cols[1] ? cols[1].trim() : '',
-                        actorUserId: cols[2] ? cols[2].trim() : '',
-                        actionType: cols[3] ? cols[3].trim() : '',
-                        postId: cols[4] ? cols[4].trim() : '',
-                        timestamp: cols[5] ? cols[5].trim() : '',
-                        isRead: cols[6] ? cols[6].trim() : ''
-                    };
+                    return { notificationId: cols[0]?.trim(), recipientUserId: cols[1]?.trim(), actorUserId: cols[2]?.trim(), actionType: cols[3]?.trim(), postId: cols[4]?.trim(), timestamp: cols[5]?.trim(), isRead: cols[6]?.trim() };
                 });
-
                 blocks.forEach(row => {
                     const blockerId = row['Blocker ID'] || row['blockerId'];
                     const blockedId = row['Blocked ID'] || row['blockedId'];
                     if (!blockMap[blockerId]) blockMap[blockerId] = new Set();
                     blockMap[blockerId].add(blockedId);
                 });
-
                 const currentUserBlockedSet = blockMap[currentUserId] || new Set();
                 const userMap = {};
-                accounts.forEach(row => {
-                    userMap[row['userID']] = { displayName: row['displayName'], profilePictureUrl: row['profilePictureUrl'] || '' };
-                });
+                accounts.forEach(row => { userMap[row['userID']] = { displayName: row['displayName'], profilePictureUrl: row['profilePictureUrl'] || '' }; });
                 const postAuthorMap = {};
                 postsData.forEach(row => { postAuthorMap[row['postID']] = row['userID']; });
-
                 const notifications = notificationsData
                     .filter(n => String(n.recipientUserId) === String(currentUserId))
                     .filter(n => !state.deletedNotificationIds.has(n.notificationId))
                     .filter(n => !currentUserBlockedSet.has(n.actorUserId) && !(blockMap[n.actorUserId] && blockMap[n.actorUserId].has(currentUserId)))
-                    .map(n => {
-                        const actorInfo = userMap[n.actorUserId] || { displayName: 'An unknown user', profilePictureUrl: '' };
-                        const postAuthorId = n.postId ? postAuthorMap[n.postId] || null : null;
-                        return {
-                            notificationId: n.notificationId,
-                            actorUserId: n.actorUserId,
-                            actorDisplayName: actorInfo.displayName,
-                            actorProfilePictureUrl: actorInfo.profilePictureUrl,
-                            actionType: n.actionType,
-                            postId: n.postId,
-                            postAuthorId,
-                            timestamp: n.timestamp,
-                            isRead: n.isRead
-                        };
-                    }).reverse();
-
+                    .map(n => ({ notificationId: n.notificationId, actorUserId: n.actorUserId, actorDisplayName: (userMap[n.actorUserId] || {}).displayName || 'Unknown', actorProfilePictureUrl: (userMap[n.actorUserId] || {}).profilePictureUrl, actionType: n.actionType, postId: n.postId, postAuthorId: n.postId ? postAuthorMap[n.postId] : null, timestamp: n.timestamp, isRead: n.isRead })).reverse();
                 return { status: 'success', notifications };
-            } catch (error) {
-                console.error('Error in getNotifications:', error);
-                throw error;
-            }
+            } catch (error) { console.error('Error in getNotifications:', error); throw error; }
         },
-
         async getUserProfile({ userId, currentUserId }) {
             try {
-                const [followers, likes, postsData, accounts, bans] = await Promise.all([
-                    tsvParser.fetchSheet('followers'), tsvParser.fetchSheet('likes'), tsvParser.fetchSheet('posts'), tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('bans')
-                ]);
-
-                const followingMap = {};
-                const followersMap = {};
+                const [followers, likes, postsData, accounts, bans] = await Promise.all([tsvParser.fetchSheet('followers'), tsvParser.fetchSheet('likes'), tsvParser.fetchSheet('posts'), tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('bans')]);
+                const followingMap = {}; const followersMap = {};
                 followers.forEach(row => {
-                    const followerId = row['followerId'] || row['followerID'] || row['follower ID'];
-                    const followingId = row['followingId'] || row['followingID'] || row['following ID'];
-                    if (followerId && followingId) {
-                        if (!followingMap[followerId]) followingMap[followerId] = [];
-                        followingMap[followerId].push(followingId);
-                        if (!followersMap[followingId]) followersMap[followingId] = [];
-                        followersMap[followingId].push(followerId);
-                    }
+                    const followerId = row['followerId'] || row['followerID']; const followingId = row['followingId'] || row['followingID'];
+                    if (followerId && followingId) { if (!followingMap[followerId]) followingMap[followerId] = []; followingMap[followerId].push(followingId); if (!followersMap[followingId]) followersMap[followingId] = []; followersMap[followingId].push(followerId); }
                 });
-
                 const likesByPostMap = {};
-                likes.forEach(row => {
-                    const postId = row['postID'];
-                    if (!likesByPostMap[postId]) likesByPostMap[postId] = [];
-                    likesByPostMap[postId].push({ likeId: row['likeID'], userId: row['userID'] });
-                });
-
+                likes.forEach(row => { if (!likesByPostMap[row['postID']]) likesByPostMap[row['postID']] = []; likesByPostMap[row['postID']].push({ likeId: row['likeID'], userId: row['userID'] }); });
                 const postsByUserMap = {};
-                postsData.forEach(row => {
-                    const userId = row['userID'];
-                    if (!postsByUserMap[userId]) postsByUserMap[userId] = [];
-                    postsByUserMap[userId].push(row['postID']);
-                });
-
-                const now = new Date();
-                const banMap = {};
+                postsData.forEach(row => { if (!postsByUserMap[row['userID']]) postsByUserMap[row['userID']] = []; postsByUserMap[row['userID']].push(row['postID']); });
+                const now = new Date(); const banMap = {};
                 bans.forEach(row => {
-                    const username = row['username'];
-                    const endDateStr = row['endDate'];
-                    if (username) {
-                        if (!endDateStr) banMap[username] = { reason: row['reason'], endDate: 'permanent' };
-                        else {
-                            const endDate = new Date(endDateStr);
-                            if (!isNaN(endDate.getTime()) && endDate > now) banMap[username] = { reason: row['reason'], endDate: endDate.toISOString() };
-                        }
-                    }
+                    const username = row['username']; const endDateStr = row['endDate'];
+                    if (username) { if (!endDateStr) banMap[username] = { reason: row['reason'], endDate: 'permanent' }; else { const endDate = new Date(endDateStr); if (!isNaN(endDate.getTime()) && endDate > now) banMap[username] = { reason: row['reason'], endDate: endDate.toISOString() }; } }
                 });
-
                 const userMap = {};
                 accounts.forEach(row => {
                     const uId = row['userID'];
-                    const rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
-                    const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
-                    
                     const userPostIds = postsByUserMap[uId] || [];
                     let totalLikes = 0;
                     userPostIds.forEach(postId => { totalLikes += (likesByPostMap[postId] || []).length; });
-
-                    userMap[uId] = {
-                        userId: uId,
-                        username: row['username'],
-                        displayName: row['displayName'],
-                        profilePictureUrl: row['profilePictureUrl'] || '',
-                        description: row['description'] || '',
-                        isVerified: row['isVerified'] || 'FALSE',
-                        postVisibility: row['firePostVisibility'] || 'Everyone',
-                        profilePrivacy,
-                        followers: (followersMap[uId] || []).length,
-                        following: (followingMap[uId] || []).length,
-                        totalLikes,
-                        isAdmin: String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE',
-                        banDetails: banMap[row['username']] || null,
-                        isSuspended: !!banMap[row['username']]
-                    };
+                    let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
+                    userMap[uId] = { userId: uId, username: row['username'], displayName: row['displayName'], profilePictureUrl: row['profilePictureUrl'] || '', description: row['description'] || '', isVerified: row['isVerified'] || 'FALSE', postVisibility: row['firePostVisibility'] || 'Everyone', profilePrivacy: String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public', followers: (followersMap[uId] || []).length, following: (followingMap[uId] || []).length, totalLikes, isAdmin: String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE', banDetails: banMap[row['username']] || null, isSuspended: !!banMap[row['username']] };
                 });
-
                 const user = userMap[userId];
                 if (!user) throw new Error("User not found");
-
                 let relationship = 'None';
                 const currentUserFollowing = followingMap[currentUserId] || [];
                 const currentUserFollowers = followersMap[currentUserId] || [];
-
                 if (currentUserFollowing.includes(userId) && currentUserFollowers.includes(userId)) relationship = 'Friends';
                 else if (currentUserFollowing.includes(userId)) relationship = 'Following';
                 else if (currentUserFollowers.includes(userId)) relationship = 'Follows You';
                 else if (userId === currentUserId) relationship = 'Self';
-                
                 user.relationship = relationship;
-                console.log(`🔒 Privacy Check for ${user.username}: ${user.profilePrivacy}`); 
-
                 return { user };
-            } catch (error) {
-                console.error('Error in getUserProfile TSV:', error);
-                throw error;
-            }
+            } catch (error) { console.error('Error in getUserProfile TSV:', error); throw error; }
         },
-
-        // --- FIX: Search Function was previously disconnected ---
         async search({ query, currentUserId }) {
             try {
-                const [accounts, postsData] = await Promise.all([
-                    tsvParser.fetchSheet('accounts'),
-                    tsvParser.fetchSheet('posts')
-                ]);
+                const [accounts, postsData] = await Promise.all([tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('posts')]);
                 const lowerQuery = query.toLowerCase();
+                const users = []; const posts = [];
                 const userPrivacyMap = {};
-                const users = [];
-
                 accounts.forEach(row => {
                     const userId = row['userID'];
                     let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
-                    const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
-                    userPrivacyMap[userId] = profilePrivacy;
-
+                    userPrivacyMap[userId] = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
                     const displayName = row['displayName'] || '';
                     const username = row['username'] || '';
-
                     if (displayName.toLowerCase().includes(lowerQuery) || username.toLowerCase().includes(lowerQuery)) {
-                        users.push({
-                            userId: userId,
-                            displayName: displayName,
-                            username: username,
-                            profilePictureUrl: row['profilePictureUrl'] || '',
-                            isVerified: row['isVerified'] || 'FALSE'
-                        });
+                        users.push({ userId, displayName, username, profilePictureUrl: row['profilePictureUrl'] || '', isVerified: row['isVerified'] || 'FALSE' });
                     }
                 });
-
-                const posts = [];
                 postsData.forEach(row => {
                     const content = row['postContent'] || '';
                     if (userPrivacyMap[row['userID']] === 'private') return;
-
                     if (content.toLowerCase().includes(lowerQuery)) {
-                        posts.push({
-                            postId: row['postID'],
-                            userId: row['userID'],
-                            postContent: content,
-                            timestamp: row['timestamp']
-                        });
+                        posts.push({ postId: row['postID'], userId: row['userID'], postContent: content, timestamp: row['timestamp'] });
                     }
                 });
-
                 return { users, posts };
-            } catch (error) {
-                console.error('Error in search TSV:', error);
-                throw error;
-            }
+            } catch (error) { console.error('Error in search TSV:', error); throw error; }
         }
     };
 
@@ -688,10 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deletedCommentIds: new Set(),
         photoLibrary: [],
         localPendingPosts: [],
-        pendingOverrides: {
-            likes: {},
-            follows: {}
-        },
+        pendingOverrides: { likes: {}, follows: {} },
         pendingCommentImages: {},
         pendingCommentDrafts: {}
     };
@@ -710,14 +424,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const modals = {
-        notifications: document.getElementById('notifications-modal'),
-        imageUrl: document.getElementById('image-url-modal'),
-        videoUrl: document.getElementById('video-url-modal'),
-        report: document.getElementById('report-modal'),
-        profileShortcut: document.getElementById('profile-shortcut-modal'),
-        newChat: document.getElementById('new-chat-modal'),
-        groupSettings: document.getElementById('group-settings-modal'),
-        ban: document.getElementById('ban-modal')
+        notifications: document.getElementById('notifications-modal'), imageUrl: document.getElementById('image-url-modal'),
+        videoUrl: document.getElementById('video-url-modal'), report: document.getElementById('report-modal'),
+        profileShortcut: document.getElementById('profile-shortcut-modal'), newChat: document.getElementById('new-chat-modal'),
+        groupSettings: document.getElementById('group-settings-modal'), ban: document.getElementById('ban-modal')
     };
 
     const VERIFIED_SVG = `<span class="material-symbols-rounded" style="color: #1DA1F2; vertical-align: -4px; margin-left: 5px;">verified</span>`;
@@ -725,14 +435,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const applyOptimisticUpdates = (posts) => {
         const now = Date.now();
         const OVERRIDE_TIMEOUT = 120000; 
-
-        for (const postId in state.pendingOverrides.likes) {
-            if (now - state.pendingOverrides.likes[postId].timestamp > OVERRIDE_TIMEOUT) delete state.pendingOverrides.likes[postId];
-        }
-        for (const userId in state.pendingOverrides.follows) {
-            if (now - state.pendingOverrides.follows[userId].timestamp > OVERRIDE_TIMEOUT) delete state.pendingOverrides.follows[userId];
-        }
-
+        for (const postId in state.pendingOverrides.likes) { if (now - state.pendingOverrides.likes[postId].timestamp > OVERRIDE_TIMEOUT) delete state.pendingOverrides.likes[postId]; }
+        for (const userId in state.pendingOverrides.follows) { if (now - state.pendingOverrides.follows[userId].timestamp > OVERRIDE_TIMEOUT) delete state.pendingOverrides.follows[userId]; }
         posts.forEach(post => {
             const likeOverride = state.pendingOverrides.likes[post.postId];
             if (likeOverride) {
@@ -741,17 +445,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (likeOverride.status === false && hasLike) post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
             }
         });
-
         const followOverrides = state.pendingOverrides.follows;
         for (const userId in followOverrides) {
             const override = followOverrides[userId];
-            if (override.status === true) {
-                if (!state.currentUserFollowingList.includes(userId)) state.currentUserFollowingList.push(userId);
-            } else {
-                state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== userId);
-            }
+            if (override.status === true) { if (!state.currentUserFollowingList.includes(userId)) state.currentUserFollowingList.push(userId); } 
+            else { state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== userId); }
         }
-        
         if (state.profileUser) {
             const followOverride = state.pendingOverrides.follows[state.profileUser.userId];
             if (followOverride) {
@@ -768,19 +467,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const api = {
         queue: [],
         isProcessingQueue: false,
-
         async enqueue(action, body, method = 'POST') {
             return new Promise((resolve, reject) => {
                 this.queue.push({ action, body, method, resolve, reject });
                 this.processQueue();
             });
         },
-
         async processQueue() {
             if (this.isProcessingQueue || this.queue.length === 0) return;
             this.isProcessingQueue = true;
             const request = this.queue.shift(); 
-
             try {
                 const result = await this.callAppsScript(request.action, request.body, request.method);
                 request.resolve(result);
@@ -792,30 +488,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.queue.length > 0) this.processQueue();
             }
         },
-
         async call(action, body = {}, method = 'POST') {
             const readActions = ['getPosts', 'getNotifications', 'getUserProfile', 'search', 'getConversationHistory'];
-
             if (readActions.includes(action) || (method === 'GET' && action !== 'login')) {
                 try {
-                    console.log(`📊 Attempting to fetch ${action} from TSV (FAST!)`);
                     let result;
-                    if (typeof dataAggregator[action] === 'function') {
-                        result = await dataAggregator[action](body);
-                    } else {
-                        throw new Error(`TSV action ${action} not implemented`);
-                    }
-                    console.log(`✅ TSV fetch successful for ${action}`);
+                    if (typeof dataAggregator[action] === 'function') { result = await dataAggregator[action](body); } 
+                    else { throw new Error(`TSV action ${action} not implemented`); }
                     return result;
                 } catch (tsvError) {
                     console.warn(`⚠️ TSV fetch failed for ${action}, falling back to Apps Script:`, tsvError);
                     return await this.enqueue(action, body, method);
                 }
             }
-            console.log(`✍️ Enqueueing WRITE operation ${action}`);
             return await this.enqueue(action, body, method);
         },
-
         async callAppsScript(action, body, method) {
             try {
                 let url = SCRIPT_URL;
@@ -823,9 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (method === 'GET') {
                     const params = new URLSearchParams({ action, ...body });
                     url += `?${params.toString()}`;
-                } else {
-                    options.body = JSON.stringify({ action, ...body });
-                }
+                } else { options.body = JSON.stringify({ action, ...body }); }
                 const response = await fetch(url, options);
                 if (!response.ok) throw new Error(`Network error: ${response.status}`);
                 const result = await response.json();
@@ -866,10 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPostDetailPage() {
             const container = views.postDetail.querySelector('.container');
             container.innerHTML = '';
-            if (!state.currentPostDetail) {
-                container.innerHTML = `<p class="error-message" style="text-align:center;">Could not load post.</p>`;
-                return;
-            }
+            if (!state.currentPostDetail) { container.innerHTML = `<p class="error-message" style="text-align:center;">Could not load post.</p>`; return; }
             const backButton = document.createElement('a');
             backButton.className = 'back-btn';
             backButton.innerHTML = '&larr; Back';
@@ -881,18 +563,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const postElement = this.createPostElement(state.currentPostDetail, { isDetailView: true });
             postContentDiv.appendChild(postElement);
         },
-        renderBanPage(banDetails) { if (state.banCountdownIntervalId) clearInterval(state.banCountdownIntervalId); const reasonEl = document.getElementById('ban-reason'); const timerContainer = document.getElementById('ban-timer-container'); const countdownEl = document.getElementById('ban-countdown'); reasonEl.textContent = banDetails.reason || 'No reason provided.'; if (banDetails.endDate === 'permanent') { timerContainer.classList.add('hidden'); return; } timerContainer.classList.remove('hidden'); const endDate = new Date(banDetails.endDate); const updateCountdown = () => { const now = new Date(); const diff = endDate - now; if (diff <= 0) { countdownEl.textContent = 'Your ban has expired. Please refresh the page.'; clearInterval(state.banCountdownIntervalId); state.banCountdownIntervalId = null; return; } const days = Math.floor(diff / (1000 * 60 * 60 * 24)); const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)); const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)); let countdownText = ''; if (days > 0) countdownText += `${days}d `; if (hours > 0 || days > 0) countdownText += `${hours}h `; countdownText += `${minutes}m`; countdownEl.textContent = countdownText.trim(); }; updateCountdown(); state.banCountdownIntervalId = setInterval(updateCountdown, 1000); },
+        renderBanPage(banDetails) { 
+            if (state.banCountdownIntervalId) clearInterval(state.banCountdownIntervalId); 
+            const reasonEl = document.getElementById('ban-reason'); 
+            const timerContainer = document.getElementById('ban-timer-container'); 
+            const countdownEl = document.getElementById('ban-countdown'); 
+            reasonEl.textContent = banDetails.reason || 'No reason provided.'; 
+            if (banDetails.endDate === 'permanent') { timerContainer.classList.add('hidden'); return; } 
+            timerContainer.classList.remove('hidden'); 
+            const endDate = new Date(banDetails.endDate); 
+            const updateCountdown = () => { 
+                const now = new Date(); 
+                const diff = endDate - now; 
+                if (diff <= 0) { 
+                    countdownEl.textContent = 'Your ban has expired. Please refresh the page.'; 
+                    clearInterval(state.banCountdownIntervalId); 
+                    state.banCountdownIntervalId = null; 
+                    localStorage.removeItem('kangaroo_ban_lock'); // Unlock when expired
+                    return; 
+                } 
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24)); 
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)); 
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)); 
+                let countdownText = ''; 
+                if (days > 0) countdownText += `${days}d `; 
+                if (hours > 0 || days > 0) countdownText += `${hours}h `; 
+                countdownText += `${minutes}m`; 
+                countdownEl.textContent = countdownText.trim(); 
+            }; 
+            updateCountdown(); 
+            state.banCountdownIntervalId = setInterval(updateCountdown, 1000); 
+        },
         renderFeed(posts, container, isMainFeed = false) {
             const validPosts = posts.filter(p => {
-                const isBlocked = state.localBlocklist.has(p.userId);
-                if (isBlocked) return false;
-                const isStory = p.isStory === true || String(p.isStory).toUpperCase() === 'TRUE';
-                if (isStory) return false;
+                if (state.localBlocklist.has(p.userId)) return false;
+                if (p.isStory === true || String(p.isStory).toUpperCase() === 'TRUE') return false;
                 return true;
             });
-
             let postsToRender = [...validPosts];
-
             if (isMainFeed) {
                 if (state.currentFeedType === 'following') {
                     postsToRender = postsToRender.filter(post => {
@@ -919,24 +627,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     postsToRender = [...stories, ...priorityPostsWithImage, ...priorityPostsWithoutImage, ...otherPosts];
                 }
             }
-
             if (!postsToRender || postsToRender.length === 0) {
-                const message = isMainFeed && state.currentFeedType === 'following'
-                    ? 'Posts from people you follow will appear here.'
-                    : 'No posts to see here.';
+                const message = isMainFeed && state.currentFeedType === 'following' ? 'Posts from people you follow will appear here.' : 'No posts to see here.';
                 container.innerHTML = `<p style="text-align: center; color: var(--secondary-text-color); margin-top: 40px;">${message}</p>`;
                 return;
             }
-
             container.innerHTML = '';
             postsToRender.forEach(post => container.appendChild(this.createPostElement(post, { isDetailView: false })));
         },
+        // ... (rest of UI functions same as before) ...
         renderProfilePage() {
             if (!state.profileUser) return;
-
             const isBlockedLocally = state.localBlocklist.has(state.profileUser.userId);
-
-            // --- 1. Handle Suspended/Banned Users (NEW CENTERED BOX DESIGN) ---
             if (state.profileUser.isSuspended || state.profileUser.banDetails) {
                 const pfpUrl = sanitizeHTML(state.profileUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.profileUser.username}`;
                 document.getElementById('profile-content').innerHTML = `
@@ -954,35 +656,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('profile-feed').innerHTML = '';
                 return;
             }
-
-            // 2. Handle Blocked Users (Locally blocked)
             if (isBlockedLocally) {
                 document.getElementById('profile-content').innerHTML = `<p style="text-align:center; padding: 40px; color:var(--secondary-text-color);">You have blocked this user.</p>`;
                 document.getElementById('profile-feed').innerHTML = '';
                 return;
             }
-
             const isOwnProfile = state.currentUser?.userId === state.profileUser.userId;
             const pfpUrl = sanitizeHTML(state.profileUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.profileUser.username}`;
             const postCount = state.posts.filter(p => p.userId === state.profileUser.userId).length;
-
-            let actionButtonHTML = '';
-            let optionsMenuHTML = '';
-
+            let actionButtonHTML = ''; let optionsMenuHTML = '';
             if (!isOwnProfile) {
                 const relationship = state.profileUser.relationship;
                 let followButton = '';
                 if (relationship === 'Friends') followButton = `<button id="follow-btn" class="secondary">Friends</button>`;
                 else if (relationship === 'Following') followButton = `<button id="follow-btn" class="secondary">Unfollow</button>`;
                 else followButton = `<button id="follow-btn" class="primary">Follow</button>`;
-
                 actionButtonHTML = followButton;
-
                 if (state.profileUser.profilePrivacy !== 'private' || relationship === 'Friends') {
                     const messageButton = `<button id="message-user-btn" class="secondary">Message</button>`;
                     actionButtonHTML += ` ${messageButton}`;
                 }
-
                 optionsMenuHTML = `
                     <div class="profile-options-menu">
                         <button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button>
@@ -993,14 +686,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                 `;
-            } else {
-                actionButtonHTML = `<button id="edit-profile-btn" class="secondary">Edit Profile</button>`;
-            }
-
-            // 3. PRIVATE PROFILE LOGIC
+            } else { actionButtonHTML = `<button id="edit-profile-btn" class="secondary">Edit Profile</button>`; }
             const isPrivate = String(state.profileUser.profilePrivacy).trim().toLowerCase() === 'private';
             const isAuthorized = isOwnProfile || state.profileUser.relationship === 'Friends';
-
             const headerHTML = `
                 <div class="profile-header">
                     ${optionsMenuHTML}
@@ -1024,10 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="profile-description-ig">${sanitizeHTML(state.profileUser.description || '')}</p>
                     </div>
                 </div>`;
-
             document.getElementById('profile-content').innerHTML = headerHTML;
-
-            // 4. Content Decision
             if (isPrivate && !isAuthorized) {
                 document.getElementById('profile-content').innerHTML += `
                     <div class="private-profile-message">
@@ -1147,22 +832,13 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         renderSearchView() {
             const resultsContainer = document.getElementById('search-results');
-            if (state.search.isLoading) {
-                resultsContainer.innerHTML = '<p style="text-align:center; color: var(--secondary-text-color);">Searching...</p>';
-                return;
-            }
-            if (state.search.results) {
-                this.renderSearchResults(state.search.results);
-            } else {
-                resultsContainer.innerHTML = '<p style="text-align:center; color: var(--secondary-text-color);">Search for users and posts.</p>';
-            }
+            if (state.search.isLoading) { resultsContainer.innerHTML = '<p style="text-align:center; color: var(--secondary-text-color);">Searching...</p>'; return; }
+            if (state.search.results) { this.renderSearchResults(state.search.results); } 
+            else { resultsContainer.innerHTML = '<p style="text-align:center; color: var(--secondary-text-color);">Search for users and posts.</p>'; }
         },
         renderSearchResults(results) {
             const container = document.getElementById('search-results');
-            if (!results.users.length && !results.posts.length) {
-                container.innerHTML = '<p style="text-align:center; color: var(--secondary-text-color);">No results found.</p>';
-                return;
-            }
+            if (!results.users.length && !results.posts.length) { container.innerHTML = '<p style="text-align:center; color: var(--secondary-text-color);">No results found.</p>'; return; }
             container.innerHTML = `${results.users.length ? `<h3>Users</h3><div id="search-results-users-list"></div>` : ''}${results.posts.length ? `<h3>Posts</h3><div id="search-results-posts-list"></div>` : ''}`;
             if (results.users.length) {
                 const usersList = document.getElementById('search-results-users-list');
@@ -1185,13 +861,9 @@ document.addEventListener('DOMContentLoaded', () => {
         renderNotifications() { const container = document.getElementById('notifications-list'); if (state.notifications.length === 0) { container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 20px 0;">No new notifications.</p>'; return; } container.innerHTML = ''; state.notifications.forEach(n => { const item = document.createElement('div'); item.className = 'notification-item'; item.dataset.notificationId = n.notificationId; item.dataset.actorId = n.actorUserId; item.dataset.postId = n.postId; let text = ''; switch (n.actionType) { case 'like': text = 'liked your post.'; break; case 'comment': text = 'commented on your post.'; break; case 'follow': text = 'started following you.'; break; } const pfpUrl = sanitizeHTML(n.actorProfilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${n.actorDisplayName}`; item.innerHTML = ` <div class="notification-item-clickable" style="display: flex; align-items: center; gap: 12px; flex-grow: 1;"> <img src="${pfpUrl}" class="pfp pfp-sm"> <div class="notification-text"> <span class="username">${sanitizeHTML(n.actorDisplayName)}</span> ${text} <div class="notification-timestamp">${formatTimestamp({ timestamp: n.timestamp })}</div> </div> </div> <button class="delete-btn delete-notification-btn" title="Delete Notification"><span class="material-symbols-rounded">close</span></button> `; container.appendChild(item); }); },
         renderImagePreview() { 
             const container = document.getElementById('post-image-preview-container'); 
-            if (state.postImageUrl) { 
-                container.innerHTML = `<img id="post-image-preview" src="${sanitizeHTML(state.postImageUrl)}" alt="Image Preview"><button id="remove-image-btn" title="Remove Media">&times;</button>`; 
-                container.classList.remove('hidden'); 
-            } else if (state.postVideoUrl) {
-                container.innerHTML = `<video id="post-video-preview" src="${sanitizeHTML(state.postVideoUrl)}" controls playsinline></video><button id="remove-image-btn" title="Remove Media">&times;</button>`; 
-                container.classList.remove('hidden'); 
-            } else { container.innerHTML = ''; container.classList.add('hidden'); } 
+            if (state.postImageUrl) { container.innerHTML = `<img id="post-image-preview" src="${sanitizeHTML(state.postImageUrl)}" alt="Image Preview"><button id="remove-image-btn" title="Remove Media">&times;</button>`; container.classList.remove('hidden'); } 
+            else if (state.postVideoUrl) { container.innerHTML = `<video id="post-video-preview" src="${sanitizeHTML(state.postVideoUrl)}" controls playsinline></video><button id="remove-image-btn" title="Remove Media">&times;</button>`; container.classList.remove('hidden'); } 
+            else { container.innerHTML = ''; container.classList.add('hidden'); } 
         },
         showFeedSkeleton(container) { const skeletonHTML = Array(3).fill().map(() => `<div class="post skeleton"><div class="post-header"><div class="pfp pfp-sm"></div><div class="post-display-name"></div></div><div class="post-content"></div></div>`).join(''); container.innerHTML = skeletonHTML; },
         showProfileSkeleton() { document.getElementById('profile-content').innerHTML = ` <div class="profile-header skeleton"> <div class="profile-grid"> <div class="pfp pfp-lg"></div> <div class="profile-info"> <div class="profile-username" style="width: 60%; height: 28px; margin-bottom: 15px; border-radius: 4px;"></div> <div class="profile-actions-ig" style="display: flex; gap: 8px; flex-wrap: wrap;"><div style="width: 100%; height: 32px; background-color: var(--border-color); border-radius: 10px;"></div></div> <div class="profile-stats-ig" style="margin-top: 15px; display: flex; gap: 40px;"><div class="stat" style="width: 30%; height: 32px;"></div><div class="stat" style="width: 30%; height: 32px;"></div><div class="stat" style="width: 30%; height: 32px;"></div></div> </div> </div> <div class="profile-display-name-bio" style="padding: 0 16px;"> <div class="profile-display-name-ig" style="width: 40%; height: 20px; margin-bottom: 5px; border-radius: 4px;"></div> <div class="profile-description-ig" style="width: 80%; height: 48px; border-radius: 4px;"></div> </div> </div>`; this.showFeedSkeleton(document.getElementById('profile-feed')); },
@@ -1217,15 +889,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const img = document.createElement('img');
                         img.src = url; img.className = 'library-photo';
                         img.onclick = () => {
-                            if (state.pendingCommentImagePostId) {
-                                state.pendingCommentImages[state.pendingCommentImagePostId] = url;
-                                state.pendingCommentImagePostId = null;
-                                ui.render(); 
-                            } else {
-                                state.postImageUrl = url;
-                                state.postVideoUrl = null; 
-                                ui.renderImagePreview(); 
-                            }
+                            if (state.pendingCommentImagePostId) { state.pendingCommentImages[state.pendingCommentImagePostId] = url; state.pendingCommentImagePostId = null; ui.render(); } 
+                            else { state.postImageUrl = url; state.postVideoUrl = null; ui.renderImagePreview(); }
                             ui.toggleModal('imageUrl', false);
                         };
                         libraryContainer.appendChild(img);
@@ -1233,12 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else libraryContainer.innerHTML = '<p style="font-size:13px; color:var(--secondary-text-color); padding:10px;">No photos available.</p>';
             }
         },
-        renderProfileShortcutModal() {
-            const user = state.currentUser;
-            if (!user) return;
-            const modalContent = modals.profileShortcut.querySelector('.modal-content');
-            modalContent.innerHTML = `<button data-action="go-to-profile" data-user-id="${user.userId}"><span class="material-symbols-rounded">account_circle</span>View Profile</button><button data-action="go-to-settings"><span class="material-symbols-rounded">settings</span>Settings</button>`;
-        },
+        renderProfileShortcutModal() { const user = state.currentUser; if (!user) return; const modalContent = modals.profileShortcut.querySelector('.modal-content'); modalContent.innerHTML = `<button data-action="go-to-profile" data-user-id="${user.userId}"><span class="material-symbols-rounded">account_circle</span>View Profile</button><button data-action="go-to-settings"><span class="material-symbols-rounded">settings</span>Settings</button>`; },
         renderSettingsPage() {
             const user = state.currentUser;
             const pfpUrl = sanitizeHTML(user.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${user.username}`;
@@ -1292,14 +952,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handlers = {
-        promptCommentImage(postId) {
-            state.pendingCommentImagePostId = postId;
-            ui.toggleModal('imageUrl', true);
-        },
-        removeCommentImage(postId) {
-            delete state.pendingCommentImages[postId];
-            ui.render();
-        },
+        // ... (existing handlers: promptCommentImage, removeCommentImage, clearAllNotifications) ...
+        promptCommentImage(postId) { state.pendingCommentImagePostId = postId; ui.toggleModal('imageUrl', true); },
+        removeCommentImage(postId) { delete state.pendingCommentImages[postId]; ui.render(); },
         clearAllNotifications() {
             const ids = state.notifications.map(n => n.notificationId);
             ids.forEach(id => state.deletedNotificationIds.add(id));
@@ -1310,14 +965,32 @@ document.addEventListener('DOMContentLoaded', () => {
             core.updateNotificationDot();
             ids.forEach(id => api.call('deleteNotification', { userId: state.currentUser.userId, notificationId: id }));
         },
-        async login() { ui.hideError('login-error'); const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; if (!username || !password) return ui.showError('login-error', 'All fields required.'); ui.setButtonState('login-btn', 'Logging In...', true); try { const { user } = await api.call('login', { username, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); await core.initializeApp(); } catch (e) { if (e.message === 'ACCOUNT_BANNED') { ui.renderBanPage(e.banDetails); core.navigateTo('suspended'); } else if (e.message === 'SERVER_OUTAGE') { core.logout(false); core.navigateTo('outage'); } else { ui.showError('login-error', e.message); } } finally { ui.setButtonState('login-btn', 'Log In', false); } },
+        async login() { 
+            ui.hideError('login-error'); 
+            const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; 
+            if (!username || !password) return ui.showError('login-error', 'All fields required.'); 
+            ui.setButtonState('login-btn', 'Logging In...', true); 
+            try { 
+                const { user } = await api.call('login', { username, password }); 
+                state.currentUser = user; 
+                localStorage.setItem('currentUser', JSON.stringify(user)); 
+                await core.initializeApp(); 
+            } catch (e) { 
+                if (e.message === 'ACCOUNT_BANNED' || e.banDetails) { 
+                    const banInfo = e.banDetails || { reason: 'Account Banned', endDate: 'permanent' };
+                    // LOCK THE BAN
+                    localStorage.setItem('kangaroo_ban_lock', JSON.stringify(banInfo));
+                    ui.renderBanPage(banInfo); 
+                    core.navigateTo('suspended'); 
+                } else if (e.message === 'SERVER_OUTAGE') { 
+                    core.logout(false); core.navigateTo('outage'); 
+                } else { ui.showError('login-error', e.message); } 
+            } finally { ui.setButtonState('login-btn', 'Log In', false); } 
+        },
+        // ... (register, createPost, enterEditMode, addComment, toggleLike, updateProfile, deletePost, deleteComment, toggleFollow, search, showProfile, showPostDetail, blockUser, unblockUser, openReportModal, submitReport, openBanModal, submitBan, showHashtagFeed, showNotifications, deleteNotification, updatePostVisibility, updateProfilePrivacy, loadMessagesView, loadConversation, sendMessage, deleteMessage, pollNewMessages, startConversationFromProfile) ...
         async register() {
             ui.hideError('register-error');
-            const [username, displayName, password] = [
-                document.getElementById('register-username').value.trim(),
-                document.getElementById('register-displayname').value.trim(),
-                document.getElementById('register-password').value.trim()
-            ];
+            const [username, displayName, password] = [document.getElementById('register-username').value.trim(), document.getElementById('register-displayname').value.trim(), document.getElementById('register-password').value.trim()];
             const confirmPassword = document.getElementById('register-password-confirm').value.trim();
             const tosChecked = document.getElementById('register-tos').checked;
             if (!tosChecked) return ui.showError('register-error', 'You must agree to the Terms of Service.');
@@ -1327,18 +1000,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (username.length > 25) return ui.showError('register-error', 'Username cannot be longer than 25 characters.');
             if (displayName.length > 30) return ui.showError('register-error', 'Display Name cannot be longer than 30 characters.');
             if (!/^[a-zA-Z0-9_.]+$/.test(username)) return ui.showError('register-error', 'Username can only contain letters, numbers, dots, and underscores.');
-
             ui.setButtonState('register-btn', 'Signing Up...', true);
             try {
                 const { user } = await api.call('register', { username, displayName, password });
                 state.currentUser = user;
                 localStorage.setItem('currentUser', JSON.stringify(user));
                 await core.initializeApp();
-            } catch (e) {
-                ui.showError('register-error', e.message);
-            } finally {
-                ui.setButtonState('register-btn', 'Sign Up', false);
-            }
+            } catch (e) { ui.showError('register-error', e.message); } finally { ui.setButtonState('register-btn', 'Sign Up', false); }
         },
         async createPost() { 
             const contentInput = document.getElementById('post-content-input'); 
@@ -1346,298 +1014,133 @@ document.addEventListener('DOMContentLoaded', () => {
             let postContent = sanitizeHTML(rawContent).replace(/\n/g, '<br>'); 
             const imageUrl = state.postImageUrl; 
             const videoUrl = state.postVideoUrl; 
-            
             if (!postContent && !imageUrl && !videoUrl && !state.editingPostId) return; 
             if (imageUrl) postContent += `<br><img src="${sanitizeHTML(imageUrl)}" alt="user image">`; 
             else if (videoUrl) postContent += `<br><video src="${sanitizeHTML(videoUrl)}" controls playsinline preload="metadata"></video>`;
-
             const isUpdating = !!state.editingPostId; 
             const button = document.getElementById('submit-post-btn'); 
             const originalButtonText = isUpdating ? 'Save Changes' : 'Post'; 
             ui.setButtonState(button.id, 'Posting...', true); 
             ui.hideError('create-post-error');
-
             try { 
-                if (isUpdating) { 
-                    await api.call('updatePost', { userId: state.currentUser.userId, postId: state.editingPostId, postContent: postContent }); 
-                } else { 
-                    const newPost = {
-                        postId: `temp_${Date.now()}`, userId: state.currentUser.userId, postContent: postContent, isStory: false, storyDuration: 0, expiryTimestamp: null, timestamp: new Date().toISOString(), likes: [], comments: [],
-                        displayName: state.currentUser.displayName, username: state.currentUser.username, profilePictureUrl: state.currentUser.profilePictureUrl, isVerified: state.currentUser.isVerified
-                    };
-                    state.localPendingPosts.unshift(newPost);
-                    state.posts.unshift(newPost);
+                if (isUpdating) { await api.call('updatePost', { userId: state.currentUser.userId, postId: state.editingPostId, postContent: postContent }); } 
+                else { 
+                    const newPost = { postId: `temp_${Date.now()}`, userId: state.currentUser.userId, postContent: postContent, isStory: false, storyDuration: 0, expiryTimestamp: null, timestamp: new Date().toISOString(), likes: [], comments: [], displayName: state.currentUser.displayName, username: state.currentUser.username, profilePictureUrl: state.currentUser.profilePictureUrl, isVerified: state.currentUser.isVerified };
+                    state.localPendingPosts.unshift(newPost); state.posts.unshift(newPost);
                     api.call('createPost', { userId: state.currentUser.userId, postContent, isStory: false, storyDuration: 0 }); 
                 } 
-                
                 contentInput.value = ''; state.postImageUrl = null; state.postVideoUrl = null; state.editingPostId = null; 
-                ui.renderImagePreview(); 
-                button.textContent = 'Post'; 
-                core.navigateTo('feed'); 
+                ui.renderImagePreview(); button.textContent = 'Post'; core.navigateTo('feed'); 
                 if (state.currentFeedType === 'foryou') ui.renderFeed(state.posts, document.getElementById('foryou-feed'), true);
                 else ui.renderFeed(state.posts, document.getElementById('following-feed'), true);
-            } catch (e) { 
-                 if (e.message.toLowerCase().includes("inappropriate")) ui.showError('create-post-error', e.message);
-                 else alert(`Error: ${e.message}`); 
-            } finally { 
-                ui.setButtonState(button.id, originalButtonText, false); 
-                if (isUpdating) { button.textContent = 'Post'; state.editingPostId = null; } 
-            } 
+            } catch (e) { if (e.message.toLowerCase().includes("inappropriate")) ui.showError('create-post-error', e.message); else alert(`Error: ${e.message}`); } finally { ui.setButtonState(button.id, originalButtonText, false); if (isUpdating) { button.textContent = 'Post'; state.editingPostId = null; } } 
         },
         enterEditMode(postId) { const post = state.posts.find(p => p.postId === postId); if (!post) return; core.navigateTo('createPost'); setTimeout(() => { const textContent = post.postContent.replace(/<br><img src=".*?" alt=".*?">/g, '').trim(); document.getElementById('post-content-input').value = textContent; document.getElementById('submit-post-btn').textContent = 'Save Changes'; state.editingPostId = postId; document.getElementById('post-content-input').focus(); }, 100); },
         async addComment(postId, commentText) { 
             if (!commentText.trim() && !state.pendingCommentImages[postId]) return;
             let finalCommentText = sanitizeHTML(commentText.trim());
             if (state.pendingCommentImages[postId]) finalCommentText += `<br><img src="${sanitizeHTML(state.pendingCommentImages[postId])}" alt="comment image">`;
-
-            const tempComment = { 
-                commentId: `temp_${Date.now()}`, userId: state.currentUser.userId, displayName: state.currentUser.displayName, isVerified: state.currentUser.isVerified, profilePictureUrl: state.currentUser.profilePictureUrl, commentText: finalCommentText, timestamp: new Date().toISOString()
-            }; 
+            const tempComment = { commentId: `temp_${Date.now()}`, userId: state.currentUser.userId, displayName: state.currentUser.displayName, isVerified: state.currentUser.isVerified, profilePictureUrl: state.currentUser.profilePictureUrl, commentText: finalCommentText, timestamp: new Date().toISOString() }; 
             const postIndex = state.posts.findIndex(p => p.postId === postId); 
-            if (postIndex > -1) { 
-                state.posts[postIndex].comments.push(tempComment); 
-                delete state.pendingCommentImages[postId];
-                delete state.pendingCommentDrafts[postId]; 
-                ui.render(); 
-            } 
-            try { await api.call('addComment', { postId, userId: state.currentUser.userId, commentText: finalCommentText }); } catch (e) { 
-                alert(`Error: ${e.message}`); 
-                const pIndex = state.posts.findIndex(p => p.postId === postId); 
-                if (pIndex > -1) { state.posts[pIndex].comments = state.posts[pIndex].comments.filter(c => c.commentId !== tempComment.commentId); ui.render(); } 
-            } 
+            if (postIndex > -1) { state.posts[postIndex].comments.push(tempComment); delete state.pendingCommentImages[postId]; delete state.pendingCommentDrafts[postId]; ui.render(); } 
+            try { await api.call('addComment', { postId, userId: state.currentUser.userId, commentText: finalCommentText }); } catch (e) { alert(`Error: ${e.message}`); const pIndex = state.posts.findIndex(p => p.postId === postId); if (pIndex > -1) { state.posts[pIndex].comments = state.posts[pIndex].comments.filter(c => c.commentId !== tempComment.commentId); ui.render(); } } 
         },
         async toggleLike(postId) {
             const post = state.posts.find(p => p.postId === postId); if (!post) return;
-            const isLiked = post.likes.some(l => l.userId === state.currentUser.userId);
-            const newStatus = !isLiked;
+            const isLiked = post.likes.some(l => l.userId === state.currentUser.userId); const newStatus = !isLiked;
             state.pendingOverrides.likes[postId] = { status: newStatus, timestamp: Date.now() };
-            if (newStatus) post.likes.push({ userId: state.currentUser.userId });
-            else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
+            if (newStatus) post.likes.push({ userId: state.currentUser.userId }); else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
             ui.render();
-            try { await api.call('toggleLike', { postId, userId: state.currentUser.userId }); } catch (e) {
-                delete state.pendingOverrides.likes[postId];
-                if (!newStatus) post.likes.push({ userId: state.currentUser.userId });
-                else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
-                ui.render(); alert(`Error: ${e.message}`);
-            }
+            try { await api.call('toggleLike', { postId, userId: state.currentUser.userId }); } catch (e) { delete state.pendingOverrides.likes[postId]; if (!newStatus) post.likes.push({ userId: state.currentUser.userId }); else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId); ui.render(); alert(`Error: ${e.message}`); }
         },
         async updateProfile() { ui.hideError('edit-profile-error'); const [displayName, pfpUrl, description] = [document.getElementById('edit-display-name').value, document.getElementById('edit-pfp-url').value, document.getElementById('edit-description').value]; ui.setButtonState('save-profile-btn', 'Saving...', true); try { await api.call('updateProfile', { userId: state.currentUser.userId, displayName, profilePictureUrl: pfpUrl, description }); state.currentUser = { ...state.currentUser, displayName, profilePictureUrl: pfpUrl, description }; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); await core.refreshFeed(false); await handlers.showProfile(state.currentUser.userId); } catch (e) { ui.showError('edit-profile-error', e.message); } finally { ui.setButtonState('save-profile-btn', 'Save Changes', false); } },
         async deletePost(postId) { 
             if (!confirm("Delete this post?")) return; 
-            state.deletedPostIds.add(postId);
-            localStorage.setItem('deletedPostIds', JSON.stringify(Array.from(state.deletedPostIds)));
-            const postToDeleteIndex = state.posts.findIndex(p => p.postId === postId); 
-            if (postToDeleteIndex !== -1) state.posts.splice(postToDeleteIndex, 1);
-            const pendingIndex = state.localPendingPosts.findIndex(p => p.postId === postId);
-            if (pendingIndex !== -1) state.localPendingPosts.splice(pendingIndex, 1);
+            state.deletedPostIds.add(postId); localStorage.setItem('deletedPostIds', JSON.stringify(Array.from(state.deletedPostIds)));
+            const postToDeleteIndex = state.posts.findIndex(p => p.postId === postId); if (postToDeleteIndex !== -1) state.posts.splice(postToDeleteIndex, 1);
+            const pendingIndex = state.localPendingPosts.findIndex(p => p.postId === postId); if (pendingIndex !== -1) state.localPendingPosts.splice(pendingIndex, 1);
             ui.render(); 
-            try { await api.call('deletePost', { postId, userId: state.currentUser.userId }); } catch (e) { 
-                alert(`Error: Could not delete post. ${e.message}`); 
-                state.deletedPostIds.delete(postId); localStorage.setItem('deletedPostIds', JSON.stringify(Array.from(state.deletedPostIds))); await core.refreshFeed(true); 
-            } 
+            try { await api.call('deletePost', { postId, userId: state.currentUser.userId }); } catch (e) { alert(`Error: Could not delete post. ${e.message}`); state.deletedPostIds.delete(postId); localStorage.setItem('deletedPostIds', JSON.stringify(Array.from(state.deletedPostIds))); await core.refreshFeed(true); } 
         },
         async deleteComment(commentId) { 
             if (!confirm("Delete this comment?")) return; 
-            state.deletedCommentIds.add(commentId);
-            localStorage.setItem('deletedCommentIds', JSON.stringify(Array.from(state.deletedCommentIds)));
+            state.deletedCommentIds.add(commentId); localStorage.setItem('deletedCommentIds', JSON.stringify(Array.from(state.deletedCommentIds)));
             let postIndex = -1, commentIndex = -1, commentToDelete = null; 
-            for (let i = 0; i < state.posts.length; i++) { 
-                const foundIndex = state.posts[i].comments.findIndex(c => c.commentId === commentId); 
-                if (foundIndex !== -1) { postIndex = i; commentIndex = foundIndex; commentToDelete = state.posts[i].comments[foundIndex]; break; } 
-            } 
+            for (let i = 0; i < state.posts.length; i++) { const foundIndex = state.posts[i].comments.findIndex(c => c.commentId === commentId); if (foundIndex !== -1) { postIndex = i; commentIndex = foundIndex; commentToDelete = state.posts[i].comments[foundIndex]; break; } } 
             if (postIndex === -1) return; 
             state.posts[postIndex].comments.splice(commentIndex, 1); ui.render(); 
-            try { await api.call('deleteComment', { commentId, userId: state.currentUser.userId }); } catch (e) { 
-                alert(`Error: Could not delete comment. ${e.message}`); 
-                state.deletedCommentIds.delete(commentId); localStorage.setItem('deletedCommentIds', JSON.stringify(Array.from(state.deletedCommentIds))); state.posts[postIndex].comments.splice(commentIndex, 0, commentToDelete); ui.render(); 
-            } 
+            try { await api.call('deleteComment', { commentId, userId: state.currentUser.userId }); } catch (e) { alert(`Error: Could not delete comment. ${e.message}`); state.deletedCommentIds.delete(commentId); localStorage.setItem('deletedCommentIds', JSON.stringify(Array.from(state.deletedCommentIds))); state.posts[postIndex].comments.splice(commentIndex, 0, commentToDelete); ui.render(); } 
         },
         async toggleFollow(followingId) {
             const followBtn = document.getElementById('follow-btn'); if (!followBtn) return; followBtn.disabled = true;
-            const isFollowing = state.currentUserFollowingList.includes(followingId);
-            const newStatus = !isFollowing;
+            const isFollowing = state.currentUserFollowingList.includes(followingId); const newStatus = !isFollowing;
             state.pendingOverrides.follows[followingId] = { status: newStatus, timestamp: Date.now() };
-            if (newStatus) state.currentUserFollowingList.push(followingId);
-            else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
+            if (newStatus) state.currentUserFollowingList.push(followingId); else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
             if (state.profileUser && state.profileUser.userId === followingId) {
                  const isFollower = state.currentUserFollowersList.includes(followingId);
-                 if(newStatus && isFollower) state.profileUser.relationship = 'Friends';
-                 else if(newStatus) state.profileUser.relationship = 'Following';
-                 else if(isFollower) state.profileUser.relationship = 'Follows You';
-                 else state.profileUser.relationship = 'None';
-                 ui.renderProfilePage();
+                 if(newStatus && isFollower) state.profileUser.relationship = 'Friends'; else if(newStatus) state.profileUser.relationship = 'Following'; else if(isFollower) state.profileUser.relationship = 'Follows You'; else state.profileUser.relationship = 'None'; ui.renderProfilePage();
             }
-            try { const result = await api.call('toggleFollow', { followerId: state.currentUser.userId, followingId }); if(state.profileUser && state.profileUser.userId === followingId) { state.profileUser.relationship = result.newRelationship; ui.renderProfilePage(); } } catch (e) {
-                delete state.pendingOverrides.follows[followingId];
-                if (!newStatus) state.currentUserFollowingList.push(followingId); else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
-                alert(`Error: ${e.message}`); ui.renderProfilePage();
-            }
+            try { const result = await api.call('toggleFollow', { followerId: state.currentUser.userId, followingId }); if(state.profileUser && state.profileUser.userId === followingId) { state.profileUser.relationship = result.newRelationship; ui.renderProfilePage(); } } catch (e) { delete state.pendingOverrides.follows[followingId]; if (!newStatus) state.currentUserFollowingList.push(followingId); else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId); alert(`Error: ${e.message}`); ui.renderProfilePage(); }
         },
-        async search(query) {
-            try {
-                const results = await api.call('search', { query, currentUserId: state.currentUser.userId }, 'GET');
-                state.search.results = results;
-            } catch (e) {
-                document.getElementById('search-results').innerHTML = `<p class="error-message">Search failed: ${e.message}</p>`;
-                state.search.results = { users: [], posts: [] };
-            } finally {
-                state.search.isLoading = false;
-                if (state.currentView === 'search') ui.renderSearchView();
-            }
-        },
+        async search(query) { try { const results = await api.call('search', { query, currentUserId: state.currentUser.userId }, 'GET'); state.search.results = results; } catch (e) { document.getElementById('search-results').innerHTML = `<p class="error-message">Search failed: ${e.message}</p>`; state.search.results = { users: [], posts: [] }; } finally { state.search.isLoading = false; if (state.currentView === 'search') ui.renderSearchView(); } },
         async showProfile(userId, scrollToPostId = null) {
             if (state.currentView !== 'profile') state.feedScrollPosition = window.scrollY;
-            state.scrollToPostId = scrollToPostId;
-            core.navigateTo('profile');
-            const cachedUser = state.userProfileCache[userId];
-            if (cachedUser) { state.profileUser = cachedUser; ui.renderProfilePage(); } else { state.profileUser = null; ui.showProfileSkeleton(); }
+            state.scrollToPostId = scrollToPostId; core.navigateTo('profile');
+            const cachedUser = state.userProfileCache[userId]; if (cachedUser) { state.profileUser = cachedUser; ui.renderProfilePage(); } else { state.profileUser = null; ui.showProfileSkeleton(); }
             try {
                 const { user } = await api.call('getUserProfile', { userId, currentUserId: state.currentUser.userId }, 'GET');
                 state.userProfileCache[userId] = { ...(state.userProfileCache[userId] || {}), ...user };
                 if (state.currentView === 'profile' && (!state.profileUser || state.profileUser.userId === userId)) {
                     state.profileUser = user;
                     if (state.pendingOverrides.follows[userId]) {
-                        const override = state.pendingOverrides.follows[userId];
-                        const isFollower = state.currentUserFollowersList.includes(userId);
-                        if (override.status && isFollower) user.relationship = 'Friends';
-                        else if (override.status) user.relationship = 'Following';
-                        else if (isFollower) user.relationship = 'Follows You';
-                        else user.relationship = 'None';
+                        const override = state.pendingOverrides.follows[userId]; const isFollower = state.currentUserFollowersList.includes(userId);
+                        if (override.status && isFollower) user.relationship = 'Friends'; else if (override.status) user.relationship = 'Following'; else if (isFollower) user.relationship = 'Follows You'; else user.relationship = 'None';
                     }
                     ui.renderProfilePage();
                 }
-            } catch (e) {
-                if (state.currentView === 'profile' && (!state.profileUser || state.profileUser.userId === userId)) {
-                    document.getElementById('profile-content').innerHTML = `<p class="error-message" style="text-align:center;">Could not load profile: ${e.message}</p>`;
-                    document.getElementById('profile-feed').innerHTML = '';
-                    if (e.message === "User not found") setTimeout(() => core.navigateTo('feed'), 1500);
-                }
-            }
+            } catch (e) { if (state.currentView === 'profile' && (!state.profileUser || state.profileUser.userId === userId)) { document.getElementById('profile-content').innerHTML = `<p class="error-message" style="text-align:center;">Could not load profile: ${e.message}</p>`; document.getElementById('profile-feed').innerHTML = ''; if (e.message === "User not found") setTimeout(() => core.navigateTo('feed'), 1500); } }
         },
-        async showPostDetail(postId) {
-            state.previousView = state.currentView;
-            const post = state.posts.find(p => p.postId === postId);
-            if (!post) { alert("Could not find post details."); return; }
-            state.currentPostDetail = post;
-            core.navigateTo('postDetail');
-        },
+        async showPostDetail(postId) { state.previousView = state.currentView; const post = state.posts.find(p => p.postId === postId); if (!post) { alert("Could not find post details."); return; } state.currentPostDetail = post; core.navigateTo('postDetail'); },
         async blockUser(userIdToBlock) { 
             if (userIdToBlock === state.currentUser.userId) return; 
             const userToBlock = state.posts.find(p => p.userId === userIdToBlock) || state.profileUser || state.blockedUsersList.find(u => u.userId === userIdToBlock); 
             const userName = userToBlock ? userToBlock.displayName : 'this user'; 
             if (confirm(`Are you sure you want to block ${userName}?`)) { 
-                state.localBlocklist.add(userIdToBlock);
-                localStorage.setItem('localBlocklist', JSON.stringify(Array.from(state.localBlocklist)));
+                state.localBlocklist.add(userIdToBlock); localStorage.setItem('localBlocklist', JSON.stringify(Array.from(state.localBlocklist)));
                 state.posts = state.posts.filter(p => p.userId !== userIdToBlock);
                 if (!state.blockedUsersList.find(u => u.userId === userIdToBlock) && userToBlock) state.blockedUsersList.push(userToBlock);
                 ui.render(); 
-                try { 
-                    await api.call('blockUser', { blockerId: state.currentUser.userId, blockedId: userIdToBlock }); 
-                    alert(`${userName} has been blocked.`); 
-                    if (state.currentView === 'profile' && state.profileUser && state.profileUser.userId === userIdToBlock) core.navigateTo('feed'); 
-                } catch (e) { alert(`Error: Could not block user. ${e.message}`); } 
+                try { await api.call('blockUser', { blockerId: state.currentUser.userId, blockedId: userIdToBlock }); alert(`${userName} has been blocked.`); if (state.currentView === 'profile' && state.profileUser && state.profileUser.userId === userIdToBlock) core.navigateTo('feed'); } catch (e) { alert(`Error: Could not block user. ${e.message}`); } 
             } 
         },
-        async unblockUser(userIdToUnblock, event) { 
-            const unblockBtn = event.target.closest('.unblock-btn'); if (!unblockBtn) return; unblockBtn.disabled = true; unblockBtn.textContent = 'Unblocking...'; 
-            try { 
-                state.localBlocklist.delete(userIdToUnblock);
-                localStorage.setItem('localBlocklist', JSON.stringify(Array.from(state.localBlocklist)));
-                state.blockedUsersList = state.blockedUsersList.filter(u => u.userId !== userIdToUnblock); 
-                ui.renderSettingsPage();
-                await api.call('blockUser', { blockerId: state.currentUser.userId, blockedId: userIdToUnblock }); 
-            } catch (e) { alert(`Error unblocking user: ${e.message}`); state.localBlocklist.add(userIdToUnblock); ui.renderSettingsPage(); } 
-        },
+        async unblockUser(userIdToUnblock, event) { const unblockBtn = event.target.closest('.unblock-btn'); if (!unblockBtn) return; unblockBtn.disabled = true; unblockBtn.textContent = 'Unblocking...'; try { state.localBlocklist.delete(userIdToUnblock); localStorage.setItem('localBlocklist', JSON.stringify(Array.from(state.localBlocklist))); state.blockedUsersList = state.blockedUsersList.filter(u => u.userId !== userIdToUnblock); ui.renderSettingsPage(); await api.call('blockUser', { blockerId: state.currentUser.userId, blockedId: userIdToUnblock }); } catch (e) { alert(`Error unblocking user: ${e.message}`); state.localBlocklist.add(userIdToUnblock); ui.renderSettingsPage(); } },
         openReportModal(userId, postId = null) { state.reporting = { userId, postId }; const user = state.posts.find(p => p.userId === userId) || state.profileUser; const title = document.getElementById('report-modal-title'); title.textContent = postId ? `Report post by ${user.displayName}` : `Report ${user.displayName}`; ui.toggleModal('report', true); },
         async submitReport() { const reason = document.getElementById('report-reason-input').value.trim(); if (!reason) { alert('Please provide a reason for the report.'); return; } ui.setButtonState('submit-report-btn', 'Submitting...', true); try { await api.call('reportUser', { reporterId: state.currentUser.userId, reportedId: state.reporting.userId, postId: state.reporting.postId, reason: reason }); alert('Report submitted successfully.'); ui.toggleModal('report', false); } catch (e) { alert(`Error: Could not submit report. ${e.message}`); } finally { ui.setButtonState('submit-report-btn', 'Submit Report', false); } },
-        openBanModal(userId) {
-            const userToBan = state.posts.find(p => p.userId === userId) || state.profileUser;
-            if (!userToBan) { alert("Could not find user information."); return; }
-            state.banningUserId = userId;
-            document.getElementById('ban-modal-title').textContent = `Ban ${userToBan.displayName}`;
-            document.getElementById('ban-reason-input').value = '';
-            ui.toggleModal('ban', true);
-        },
-        async submitBan() {
-            const reason = document.getElementById('ban-reason-input').value.trim();
-            const durationHours = document.getElementById('ban-duration-select').value;
-            const userIdToBan = state.banningUserId;
-            if (!reason) { alert('Please provide a reason for the ban.'); return; }
-            ui.setButtonState('submit-ban-btn', 'Submitting...', true);
-            try {
-                const result = await api.call('banUser', { adminUserId: state.currentUser.userId, bannedUserId: userIdToBan, reason: reason, durationHours: parseInt(durationHours) });
-                alert(result.message || 'User has been banned successfully.');
-                ui.toggleModal('ban', false); state.banningUserId = null; await core.refreshFeed(true);
-            } catch (e) { alert(`Error: ${e.message}`); } finally { ui.setButtonState('submit-ban-btn', 'Submit Ban', false); }
-        },
+        openBanModal(userId) { const userToBan = state.posts.find(p => p.userId === userId) || state.profileUser; if (!userToBan) { alert("Could not find user information."); return; } state.banningUserId = userId; document.getElementById('ban-modal-title').textContent = `Ban ${userToBan.displayName}`; document.getElementById('ban-reason-input').value = ''; ui.toggleModal('ban', true); },
+        async submitBan() { const reason = document.getElementById('ban-reason-input').value.trim(); const durationHours = document.getElementById('ban-duration-select').value; const userIdToBan = state.banningUserId; if (!reason) { alert('Please provide a reason for the ban.'); return; } ui.setButtonState('submit-ban-btn', 'Submitting...', true); try { const result = await api.call('banUser', { adminUserId: state.currentUser.userId, bannedUserId: userIdToBan, reason: reason, durationHours: parseInt(durationHours) }); alert(result.message || 'User has been banned successfully.'); ui.toggleModal('ban', false); state.banningUserId = null; await core.refreshFeed(true); } catch (e) { alert(`Error: ${e.message}`); } finally { ui.setButtonState('submit-ban-btn', 'Submit Ban', false); } },
         showHashtagFeed(tag) { if (state.currentView !== 'hashtagFeed') { state.feedScrollPosition = window.scrollY; } core.navigateTo('hashtagFeed'); const titleEl = document.getElementById('hashtag-title'); const feedEl = document.getElementById('hashtag-feed'); const fullHashtag = `#${tag.toLowerCase()}`; titleEl.textContent = `Posts tagged with ${fullHashtag}`; const filteredPosts = state.posts.filter(post => (post.postContent || '').toLowerCase().includes(fullHashtag)); ui.renderFeed(filteredPosts, feedEl, false); },
         async showNotifications() { ui.toggleModal('notifications', true); ui.renderNotifications(); if (state.unreadNotificationCount > 0) { state.unreadNotificationCount = 0; core.updateNotificationDot(); try { await api.call('markNotificationsAsRead', { userId: state.currentUser.userId }); } catch (e) { console.error("Failed to mark notifications as read:", e); } } },
-        async deleteNotification(notificationId) { 
-            state.deletedNotificationIds.add(notificationId);
-            localStorage.setItem('notificationBlacklist', JSON.stringify(Array.from(state.deletedNotificationIds))); 
-            state.notifications = state.notifications.filter(n => n.notificationId !== notificationId); 
-            ui.renderNotifications(); 
-            try { await api.call('deleteNotification', { userId: state.currentUser.userId, notificationId }); } catch (e) { console.error("Could not delete notification: " + e.message); } 
-        },
+        async deleteNotification(notificationId) { state.deletedNotificationIds.add(notificationId); localStorage.setItem('notificationBlacklist', JSON.stringify(Array.from(state.deletedNotificationIds))); state.notifications = state.notifications.filter(n => n.notificationId !== notificationId); ui.renderNotifications(); try { await api.call('deleteNotification', { userId: state.currentUser.userId, notificationId }); } catch (e) { console.error("Could not delete notification: " + e.message); } },
         async updatePostVisibility(e) { const newVisibility = e.target.value; const selectElement = e.target; selectElement.disabled = true; try { await api.call('updatePostVisibility', { userId: state.currentUser.userId, visibility: newVisibility }); state.currentUser.postVisibility = newVisibility; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); } catch (err) { alert('Could not update setting: ' + err.message); selectElement.value = state.currentUser.postVisibility; } finally { selectElement.disabled = false; } },
         async updateProfilePrivacy(e) { const newPrivacy = e.target.checked ? 'private' : 'public'; const switchElement = e.target; switchElement.disabled = true; try { await api.call('updateProfilePrivacy', { userId: state.currentUser.userId, privacy: newPrivacy }); state.currentUser.profilePrivacy = newPrivacy; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); } catch (err) { alert('Could not update setting: ' + err.message); switchElement.checked = state.currentUser.profilePrivacy === 'private'; } finally { switchElement.disabled = false; } },
         async loadMessagesView() { core.navigateTo('messages'); ui.renderMessagesPage(); },
         async loadConversation(otherUserId) {
-            if (state.isConversationLoading) return;
-            if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
-            const convosListEl = document.getElementById('conversations-list');
-            convosListEl.classList.add('is-loading');
-            state.isConversationLoading = true;
-            state.currentConversation = { id: otherUserId, messages: [], isGroup: false };
-            const convo = state.conversations.find(c => c.otherUser.userId === otherUserId);
-            if (convo) convo.unreadCount = 0;
-            core.updateMessageDot();
-            document.querySelector('.messages-container').classList.add('show-chat-view');
-            ui.renderMessagesPage();
+            if (state.isConversationLoading) return; if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
+            const convosListEl = document.getElementById('conversations-list'); convosListEl.classList.add('is-loading'); state.isConversationLoading = true;
+            state.currentConversation = { id: otherUserId, messages: [], isGroup: false }; const convo = state.conversations.find(c => c.otherUser.userId === otherUserId); if (convo) convo.unreadCount = 0; core.updateMessageDot();
+            document.querySelector('.messages-container').classList.add('show-chat-view'); ui.renderMessagesPage();
             document.getElementById('conversation-view').innerHTML = '<div id="messages-list" style="display: flex; justify-content: center; align-items: center; height: 100%;"><p>Loading messages...</p></div>';
-            try {
-                const { messages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
-                state.currentConversation.messages = messages.map(m => ({ ...m, status: 'sent' }));
-                ui.renderConversationHistory();
-                api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId });
-                state.messagePollingIntervalId = setInterval(() => handlers.pollNewMessages(otherUserId), 3000); 
-            } catch (e) {
-                document.getElementById('conversation-view').innerHTML = `<div id="conversation-placeholder" class="error-message">Could not load conversation: ${e.message}</div>`;
-            } finally {
-                state.isConversationLoading = false;
-                convosListEl.classList.remove('is-loading');
-            }
+            try { const { messages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET'); state.currentConversation.messages = messages.map(m => ({ ...m, status: 'sent' })); ui.renderConversationHistory(); api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId }); state.messagePollingIntervalId = setInterval(() => handlers.pollNewMessages(otherUserId), 3000); } catch (e) { document.getElementById('conversation-view').innerHTML = `<div id="conversation-placeholder" class="error-message">Could not load conversation: ${e.message}</div>`; } finally { state.isConversationLoading = false; convosListEl.classList.remove('is-loading'); }
         },
         async sendMessage() {
-            const input = document.getElementById('message-input');
-            const messageContent = input.value.trim();
-            const { id: recipientId } = state.currentConversation;
-            if (!messageContent || !recipientId) return;
-            const tempId = `temp_${Date.now()}`;
+            const input = document.getElementById('message-input'); const messageContent = input.value.trim(); const { id: recipientId } = state.currentConversation;
+            if (!messageContent || !recipientId) return; const tempId = `temp_${Date.now()}`;
             const tempMessage = { messageId: tempId, senderId: state.currentUser.userId, messageContent, status: 'sending', senderName: state.currentUser.displayName, timestamp: new Date().toISOString() };
-            input.value = ''; input.focus();
-            state.currentConversation.messages.push(tempMessage);
-            ui.renderConversationHistory();
-            try {
-                await api.call('sendMessage', { senderId: state.currentUser.userId, recipientId, messageContent, isGroup: false });
-                setTimeout(() => handlers.pollNewMessages(recipientId), 1000);
-            } catch (e) {
-                const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === tempId);
-                if (messageIndex > -1) { state.currentConversation.messages[messageIndex].status = 'failed'; ui.renderConversationHistory(); }
-            }
+            input.value = ''; input.focus(); state.currentConversation.messages.push(tempMessage); ui.renderConversationHistory();
+            try { await api.call('sendMessage', { senderId: state.currentUser.userId, recipientId, messageContent, isGroup: false }); setTimeout(() => handlers.pollNewMessages(recipientId), 1000); } catch (e) { const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === tempId); if (messageIndex > -1) { state.currentConversation.messages[messageIndex].status = 'failed'; ui.renderConversationHistory(); } }
         },
         async deleteMessage(messageId) { if (!confirm("Unsend message?")) return; const messageWrapper = document.querySelector(`.message-wrapper[data-message-id="${messageId}"]`); if (!messageWrapper) return; messageWrapper.style.opacity = '0.5'; try { await api.call('deleteMessage', { userId: state.currentUser.userId, messageId }); const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === messageId); if (messageIndex > -1) state.currentConversation.messages.splice(messageIndex, 1); messageWrapper.remove(); } catch (e) { alert(`Error: ${e.message}`); messageWrapper.style.opacity = '1'; } },
-        async pollNewMessages(otherUserId) {
-            if (state.currentView !== 'messages' || state.currentConversation.id !== otherUserId) { if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); return; }
-            try {
-                const { messages: remoteMessages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
-                const newMessagesFormatted = remoteMessages.map(m => ({ ...m, status: 'sent' }));
-                const pendingMessages = state.currentConversation.messages.filter(m => m.status === 'sending' || m.status === 'failed');
-                state.currentConversation.messages = [...newMessagesFormatted, ...pendingMessages];
-                ui.renderConversationHistory();
-                api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId });
-            } catch (e) { console.error("Polling failed:", e.message); }
-        },
+        async pollNewMessages(otherUserId) { if (state.currentView !== 'messages' || state.currentConversation.id !== otherUserId) { if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); return; } try { const { messages: remoteMessages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET'); const newMessagesFormatted = remoteMessages.map(m => ({ ...m, status: 'sent' })); const pendingMessages = state.currentConversation.messages.filter(m => m.status === 'sending' || m.status === 'failed'); state.currentConversation.messages = [...newMessagesFormatted, ...pendingMessages]; ui.renderConversationHistory(); api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId }); } catch (e) { console.error("Polling failed:", e.message); } },
         async startConversationFromProfile(otherUserId) { core.navigateTo('messages'); const existingConvo = state.conversations.find(c => c.otherUser.userId === otherUserId); if (!existingConvo && state.profileUser && state.profileUser.userId === otherUserId) { const newConvo = { otherUser: { userId: state.profileUser.userId, displayName: state.profileUser.displayName, profilePictureUrl: state.profileUser.profilePictureUrl, isVerified: state.profileUser.isVerified }, lastMessage: '', timestamp: new Date().toISOString(), unreadCount: 0 }; state.conversations.unshift(newConvo); } await handlers.loadConversation(otherUserId, false); }
     };
 
@@ -1651,83 +1154,63 @@ document.addEventListener('DOMContentLoaded', () => {
             if (['feed', 'profile'].includes(view)) core.refreshFeed(false); 
         },
         async refreshFeed(showLoader = true) {
-            if (showLoader && state.currentView === 'feed') {
-                const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
-                ui.showFeedSkeleton(activeFeedEl);
-            }
+            if (showLoader && state.currentView === 'feed') { const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed'); ui.showFeedSkeleton(activeFeedEl); }
             try {
                 const [postsAndConvosResult, notificationsResult] = await Promise.all([
                     api.call('getPosts', { userId: state.currentUser.userId }, 'GET'),
                     api.call('getNotifications', { userId: state.currentUser.userId }, 'GET')
                 ]);
                 const { posts = [], conversations = [], currentUserFollowingList = [], currentUserFollowersList = [], blockedUsersList = [], currentUserData = null, bannerText = '', photoLibrary = [] } = postsAndConvosResult || {};
-                const banner = document.getElementById('global-banner');
-                const root = document.documentElement;
-                if (bannerText) { banner.textContent = bannerText; banner.classList.remove('hidden'); setTimeout(() => root.style.setProperty('--banner-height', `${banner.offsetHeight}px`), 0); }
-                else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
+                const banner = document.getElementById('global-banner'); const root = document.documentElement;
+                if (bannerText) { banner.textContent = bannerText; banner.classList.remove('hidden'); setTimeout(() => root.style.setProperty('--banner-height', `${banner.offsetHeight}px`), 0); } else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
                 if (currentUserData) {
                     if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
-                    if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
-                    state.currentUser = currentUserData;
-                    state.userProfileCache[currentUserData.userId] = currentUserData;
+                    
+                    // --- NEW TRAP LOGIC ---
+                    if (currentUserData.banDetails) { 
+                        // Lock the ban immediately
+                        localStorage.setItem('kangaroo_ban_lock', JSON.stringify(currentUserData.banDetails));
+                        ui.renderBanPage(currentUserData.banDetails); 
+                        core.navigateTo('suspended'); 
+                        return; // TRAPPED. Exit function.
+                    }
+                    
+                    state.currentUser = currentUserData; state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
-                    const navPfp = document.getElementById('nav-pfp');
-                    if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
+                    const navPfp = document.getElementById('nav-pfp'); if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
                 }
 
                 applyOptimisticUpdates(posts);
-
-                let combinedPosts = [...posts];
-                if (state.localPendingPosts && state.localPendingPosts.length > 0) {
-                    const now = Date.now();
-                    state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
-                    combinedPosts = [...state.localPendingPosts, ...combinedPosts];
-                }
-
-                state.posts = combinedPosts;
-                state.conversations = conversations;
-                state.currentUserFollowingList = currentUserFollowingList;
-                state.currentUserFollowersList = currentUserFollowersList || [];
-                state.blockedUsersList = blockedUsersList || [];
-                state.photoLibrary = photoLibrary; 
-                let { notifications } = notificationsResult || { notifications: [] };
-                notifications = notifications.filter(n => !state.deletedNotificationIds.has(n.notificationId));
-                state.notifications = notifications;
-                state.unreadNotificationCount = notifications.filter(n => String(n.isRead).toUpperCase() !== 'TRUE').length;
-
-                this.updateNotificationDot();
-                this.updateMessageDot();
-                state.freshDataLoaded = true;
-                const messagesNavBtn = document.getElementById('messages-btn');
-                if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
+                let combinedPosts = [...posts]; if (state.localPendingPosts && state.localPendingPosts.length > 0) { const now = Date.now(); state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000); combinedPosts = [...state.localPendingPosts, ...combinedPosts]; }
+                state.posts = combinedPosts; state.conversations = conversations; state.currentUserFollowingList = currentUserFollowingList; state.currentUserFollowersList = currentUserFollowersList || []; state.blockedUsersList = blockedUsersList || []; state.photoLibrary = photoLibrary; 
+                let { notifications } = notificationsResult || { notifications: [] }; notifications = notifications.filter(n => !state.deletedNotificationIds.has(n.notificationId)); state.notifications = notifications; state.unreadNotificationCount = notifications.filter(n => String(n.isRead).toUpperCase() !== 'TRUE').length;
+                this.updateNotificationDot(); this.updateMessageDot(); state.freshDataLoaded = true;
+                const messagesNavBtn = document.getElementById('messages-btn'); if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
             } catch (e) {
                 console.error("Feed refresh error:", e);
-                // --- FIX: Check if it is a ban error inside the refresh loop ---
+                // Catch network-level ban errors too
                 if (e.message === 'ACCOUNT_BANNED' || e.banDetails) {
                     const banInfo = e.banDetails || { reason: 'Account Banned', endDate: 'permanent' };
+                    localStorage.setItem('kangaroo_ban_lock', JSON.stringify(banInfo));
                     ui.renderBanPage(banInfo);
                     core.navigateTo('suspended');
-                    return; // Stop here, do not logout
+                    return; 
                 }
-                
                 if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`;
-                
-                // Only logout if it is explicitly a validation/session error, NOT a ban error
                 if (e.message.includes("validate user session")) setTimeout(() => core.logout(), 2000);
             } finally {
-                if (state.currentView === 'feed') {
-                    const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
-                    ui.renderFeed(state.posts, activeFeedEl, true);
-                    const inactiveFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('following-feed') : document.getElementById('foryou-feed');
-                    inactiveFeedEl.innerHTML = '';
-                } else if (['profile', 'hashtagFeed', 'messages', 'settings', 'search', 'createPost', 'postDetail'].includes(state.currentView)) ui.render();
+                if (state.currentView === 'feed') { const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed'); ui.renderFeed(state.posts, activeFeedEl, true); const inactiveFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('following-feed') : document.getElementById('foryou-feed'); inactiveFeedEl.innerHTML = ''; } else if (['profile', 'hashtagFeed', 'messages', 'settings', 'search', 'createPost', 'postDetail'].includes(state.currentView)) ui.render();
             }
         },
         updateNotificationDot() { document.getElementById('notification-dot').style.display = state.unreadNotificationCount > 0 ? 'block' : 'none'; },
         updateMessageDot() { const hasUnread = state.conversations.some(c => c.unreadCount > 0); document.getElementById('message-dot').style.display = hasUnread ? 'block' : 'none'; },
-        logout(forceReload = true) { localStorage.removeItem('currentUser'); state.currentUser = null; if (state.backgroundRefreshIntervalId) clearInterval(state.backgroundRefreshIntervalId); if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); if (forceReload) window.location.reload(); },
+        logout(forceReload = true) { 
+            // Don't allow logout if banned
+            if(localStorage.getItem('kangaroo_ban_lock')) return;
+            localStorage.removeItem('currentUser'); state.currentUser = null; if (state.backgroundRefreshIntervalId) clearInterval(state.backgroundRefreshIntervalId); if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); if (forceReload) window.location.reload(); 
+        },
         setupEventListeners() {
             let searchTimeout;
             document.getElementById('show-register-link').addEventListener('click', () => { document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
@@ -1739,26 +1222,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isMobile = window.innerWidth <= 1023;
                 if (isMobile) {
                     e.preventDefault(); e.stopPropagation(); ui.renderProfileShortcutModal();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const bottomPos = (window.innerHeight - rect.top) + 10; 
-                    const rightPos = (window.innerWidth - rect.right); 
-                    const position = { bottom: bottomPos, right: rightPos < 10 ? 10 : rightPos };
-                    ui.toggleModal('profileShortcut', true, position);
+                    const rect = e.currentTarget.getBoundingClientRect(); const bottomPos = (window.innerHeight - rect.top) + 10; const rightPos = (window.innerWidth - rect.right); const position = { bottom: bottomPos, right: rightPos < 10 ? 10 : rightPos }; ui.toggleModal('profileShortcut', true, position);
                 } else handlers.showProfile(state.currentUser.userId);
             });
             document.getElementById('clear-notifications-btn').addEventListener('click', handlers.clearAllNotifications);
             document.getElementById('settings-nav-btn').addEventListener('click', () => core.navigateTo('settings'));
             document.getElementById('search-btn').addEventListener('click', () => core.navigateTo('search'));
             const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.addEventListener('input', (e) => {
-                    clearTimeout(searchTimeout);
-                    const query = e.target.value.trim();
-                    state.search.query = query;
-                    if (query.length === 0) { state.search.results = null; state.search.isLoading = false; ui.renderSearchView(); } 
-                    else if (query.length >= 2) { state.search.isLoading = true; ui.renderSearchView(); searchTimeout = setTimeout(() => handlers.search(query), 300); }
-                });
-            }
+            if (searchInput) { searchInput.addEventListener('input', (e) => { clearTimeout(searchTimeout); const query = e.target.value.trim(); state.search.query = query; if (query.length === 0) { state.search.results = null; state.search.isLoading = false; ui.renderSearchView(); } else if (query.length >= 2) { state.search.isLoading = true; ui.renderSearchView(); searchTimeout = setTimeout(() => handlers.search(query), 300); } }); }
             document.getElementById('notifications-btn').addEventListener('click', handlers.showNotifications);
             document.getElementById('messages-btn').addEventListener('click', () => handlers.loadMessagesView());
             document.querySelectorAll('.close-modal-btn').forEach(btn => btn.addEventListener('click', (e) => { const modal = e.target.closest('.modal'); if (modal) { const modalName = modal.id.replace('-modal', '').replace(/-(\w)/g, (match, p1) => p1.toUpperCase()); ui.toggleModal(modalName, false); } }));
@@ -1780,15 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-profile-view').addEventListener('click', e => { const choice = e.target.closest('#pfp-choices-gallery img'); if (choice) { document.getElementById('edit-pfp-url').value = choice.dataset.url; document.querySelectorAll('#pfp-choices-gallery img').forEach(img => img.classList.remove('selected')); choice.classList.add('selected'); } });
             document.body.addEventListener('input', (e) => { if (e.target.matches('.comment-form input')) { const postId = e.target.closest('.post').dataset.postId; state.pendingCommentDrafts[postId] = e.target.value; } });
             document.querySelectorAll('.feed-nav-tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    const feedType = tab.dataset.feedType;
-                    if (state.currentFeedType === feedType) return;
-                    state.currentFeedType = feedType;
-                    document.querySelectorAll('.feed-nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
-                    const container = document.getElementById('feed-container');
-                    if (feedType === 'following') { container.style.transform = 'translateX(-50%)'; const followingFeedEl = document.getElementById('following-feed'); if (followingFeedEl.innerHTML.trim() === '') ui.renderFeed(state.posts, followingFeedEl, true); } 
-                    else { container.style.transform = 'translateX(0)'; const foryouFeedEl = document.getElementById('foryou-feed'); if (foryouFeedEl.innerHTML.trim() === '') ui.renderFeed(state.posts, foryouFeedEl, true); }
-                });
+                tab.addEventListener('click', () => { const feedType = tab.dataset.feedType; if (state.currentFeedType === feedType) return; state.currentFeedType = feedType; document.querySelectorAll('.feed-nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); const container = document.getElementById('feed-container'); if (feedType === 'following') { container.style.transform = 'translateX(-50%)'; const followingFeedEl = document.getElementById('following-feed'); if (followingFeedEl.innerHTML.trim() === '') ui.renderFeed(state.posts, followingFeedEl, true); } else { container.style.transform = 'translateX(0)'; const foryouFeedEl = document.getElementById('foryou-feed'); if (foryouFeedEl.innerHTML.trim() === '') ui.renderFeed(state.posts, foryouFeedEl, true); } });
             });
             document.getElementById('open-create-post-btn').addEventListener('click', () => core.navigateTo('createPost'));
             document.body.addEventListener('click', (e) => {
@@ -1849,6 +1312,20 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('auth-view').addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; const activeForm = !document.getElementById('login-form').classList.contains('hidden') ? document.getElementById('login-form') : document.getElementById('register-form'); e.preventDefault(); const inputs = [...activeForm.querySelectorAll('input')]; const currentInputIndex = inputs.findIndex(input => input === document.activeElement); if (currentInputIndex > -1 && currentInputIndex < inputs.length - 1) inputs[currentInputIndex + 1].focus(); else activeForm.querySelector('button.primary').click(); });
         },
         async initializeApp() { 
+            // 1. BAN LOCK CHECK (Happens before ANYTHING else)
+            const lockedBan = JSON.parse(localStorage.getItem('kangaroo_ban_lock'));
+            if (lockedBan) {
+                const now = new Date();
+                const endDate = lockedBan.endDate === 'permanent' ? null : new Date(lockedBan.endDate);
+                if (!endDate || endDate > now) {
+                    ui.renderBanPage(lockedBan);
+                    core.navigateTo('suspended');
+                    return; // ABSOLUTE STOP. No network calls.
+                } else {
+                    localStorage.removeItem('kangaroo_ban_lock'); // Ban Expired
+                }
+            }
+
             const savedUser = JSON.parse(localStorage.getItem('currentUser')); 
             if (!savedUser) { return core.navigateTo('auth'); } 
             state.currentUser = savedUser; 
@@ -1863,13 +1340,14 @@ document.addEventListener('DOMContentLoaded', () => {
             try { 
                 await core.refreshFeed(false); 
             } catch (error) { 
+                // Final catch-all for ban errors
                 if (error.message === 'ACCOUNT_BANNED' || error.banDetails) {
                     const banInfo = error.banDetails || { reason: 'Account Banned', endDate: 'permanent' };
+                    localStorage.setItem('kangaroo_ban_lock', JSON.stringify(banInfo));
                     ui.renderBanPage(banInfo);
                     core.navigateTo('suspended');
                     return; 
                 }
-                
                 alert(`Session error: ${error.message}. Please log in again.`); 
                 core.logout(); 
             } 
@@ -1878,24 +1356,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const formatTimestamp = (post) => {
-        const timestampStr = post.timestamp;
-        if (!timestampStr) return '';
-        
-        // Safety check for empty or invalid timestamps
+        const timestampStr = post.timestamp; if (!timestampStr) return '';
         if (typeof timestampStr === 'string' && timestampStr.trim() === '') return '';
-        
-        const date = new Date(timestampStr);
-        if (isNaN(date.getTime())) return ''; // Fix for "Invalid Date"
-
-        const now = new Date();
-        const secondsAgo = Math.round((now - date) / 1000);
-        if (secondsAgo < 60) return 'just now';
-        const minutesAgo = Math.round(secondsAgo / 60);
-        if (minutesAgo < 60) return `${minutesAgo}m ago`;
-        const hoursAgo = Math.round(minutesAgo / 60);
-        if (hoursAgo < 24) return `${hoursAgo}h ago`;
-        const daysAgo = Math.round(hoursAgo / 24);
-        if (daysAgo <= 14) return `${daysAgo}d ago`;
+        const date = new Date(timestampStr); if (isNaN(date.getTime())) return '';
+        const now = new Date(); const secondsAgo = Math.round((now - date) / 1000);
+        if (secondsAgo < 60) return 'just now'; const minutesAgo = Math.round(secondsAgo / 60); if (minutesAgo < 60) return `${minutesAgo}m ago`;
+        const hoursAgo = Math.round(minutesAgo / 60); if (hoursAgo < 24) return `${hoursAgo}h ago`;
+        const daysAgo = Math.round(hoursAgo / 24); if (daysAgo <= 14) return `${daysAgo}d ago`;
         return date.toLocaleDateString('en-us', { month: 'short', day: 'numeric' });
     };
     const sanitizeHTML = (str) => { if (!str) return ''; const temp = document.createElement('div'); temp.textContent = str; return temp.innerHTML; };
