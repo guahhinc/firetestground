@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const lines = tsvText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
 
-            // TRIM HEADERS to fix "invisible space" issues in Google Sheets
             const headers = lines[0].split('\t').map(h => h.trim());
             const data = [];
 
@@ -65,7 +64,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Helper: Get column value case-insensitively
     const getColumn = (row, ...keys) => {
         for (const key of keys) {
             if (row[key] !== undefined && row[key] !== '') return row[key];
@@ -75,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return undefined;
     };
 
-    // ===== Data Aggregation (client-side logic) =====
+    // ===== Data Aggregation =====
     const dataAggregator = {
         async getConversationHistory({ userId, otherUserId }) {
             try {
@@ -100,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isRead = row['isRead'];
 
                     let isMatch = false;
-                    // Strict ID matching using strings
                     if ((String(senderId) === String(currentUserId) && String(recipientId) === String(otherUserId)) || 
                         (String(senderId) === String(otherUserId) && String(recipientId) === String(currentUserId))) {
                         isMatch = true;
@@ -155,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     tsvParser.fetchSheet('photoLibrary')
                 ]);
 
-                // Server Status Check
                 let isOutage = false;
                 let bannerText = '';
                 let isCurrentUserOutageExempt = false;
@@ -169,7 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // FIX: Strict String Comparison for IDs
                 const currentUserRow = accounts.find(row => String(row['userID']) === String(currentUserId));
                 
                 if (currentUserRow) {
@@ -179,17 +174,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isOutage && !isCurrentUserOutageExempt) {
                     return {
-                        posts: [],
-                        conversations: [],
-                        currentUserFollowingList: [],
-                        currentUserFollowersList: [],
-                        blockedUsersList: [],
-                        currentUserData: { isSuspended: 'OUTAGE' },
-                        bannerText
+                        posts: [], conversations: [], currentUserFollowingList: [], currentUserFollowersList: [], blockedUsersList: [],
+                        currentUserData: { isSuspended: 'OUTAGE' }, bannerText
                     };
                 }
 
-                // Build Maps
                 const now = new Date();
                 const banMap = {};
                 bans.forEach(row => {
@@ -225,7 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     likesByPostMap[postId].push({ likeId, userId });
                 });
 
-                // Build comments map
                 const commentsByPostMap = {};
                 comments.forEach(row => {
                     const commentId = row['commentID'];
@@ -234,7 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const postId = row['postID'];
                     const userId = row['userID'];
                     const commentText = row['commentText'];
-                    
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
 
                     if (!commentsByPostMap[postId]) commentsByPostMap[postId] = [];
@@ -1663,9 +1650,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (bannerText) { banner.textContent = bannerText; banner.classList.remove('hidden'); setTimeout(() => root.style.setProperty('--banner-height', `${banner.offsetHeight}px`), 0); }
                 else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
-                // === FIX: SESSION PERSISTENCE LOGIC ===
+                let pendingBan = null; // STORE BAN STATE
+
                 if (currentUserData) {
-                    // Normal flow: Server returned user data
+                    // 1. SAVE SESSION FIRST (Crucial)
                     state.currentUser = currentUserData;
                     state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
@@ -1674,14 +1662,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
 
-                    // Handle Ban/Outage *AFTER* ensuring session is saved
+                    // 2. Check Ban but DON'T redirect yet
                     if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
-                    if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
+                    if (currentUserData.banDetails) {
+                        pendingBan = currentUserData.banDetails;
+                    }
                 } else if (state.currentUser) {
-                    // Fallback: Server didn't return user data (network glitch?), KEEP LOGGED IN
-                    console.warn("Server didn't return user row, keeping local session active.");
+                    console.warn("Using cached user data...");
                 } else {
-                    // Only error out if we have absolutely no user data
                     throw new Error("Session invalid.");
                 }
 
@@ -1710,10 +1698,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.freshDataLoaded = true;
                 const messagesNavBtn = document.getElementById('messages-btn');
                 if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
+
+                // 3. NOW TRIGGER THE BAN TRAP (After UI is ready)
+                if (pendingBan) {
+                    setTimeout(() => {
+                        ui.renderBanPage(pendingBan);
+                        core.navigateTo('suspended');
+                    }, 500); 
+                }
+
             } catch (e) {
                 console.error("Feed refresh error:", e);
-                // === FIX: DO NOT LOG OUT ON GENERIC ERRORS ===
-                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed. Trying again...</p>`;
+                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`;
+                // Removed the auto-logout on error here
             } finally {
                 if (state.currentView === 'feed') {
                     const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
@@ -1858,7 +1855,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl);
             core.navigateTo('feed'); 
             ui.showFeedSkeleton(document.getElementById('foryou-feed')); 
-            // --- FIX: NEVER LOG OUT ON INIT ERROR, JUST WARN ---
             try { await core.refreshFeed(false); } catch (error) { console.error("Offline/Error during init:", error); } 
         },
         main() { core.setupEventListeners(); const savedTheme = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', savedTheme); document.getElementById('theme-switch').checked = savedTheme === 'dark'; if (localStorage.getItem('currentUser')) { core.initializeApp(); } else { core.navigateTo('auth'); } }
