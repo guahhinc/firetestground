@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const lines = tsvText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
 
-            // TRIM HEADERS to fix "invisible space" issues in Google Sheets
             const headers = lines[0].split('\t').map(h => h.trim());
             const data = [];
 
@@ -65,18 +64,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Helper: Get column value case-insensitively (Fixes "Invalid Date" and "Privacy" bugs)
     const getColumn = (row, ...keys) => {
         for (const key of keys) {
             if (row[key] !== undefined && row[key] !== '') return row[key];
-            // Case-insensitive check
             const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
             if (foundKey) return row[foundKey];
         }
         return undefined;
     };
 
-    // ===== Data Aggregation (client-side logic) =====
+    // ===== Data Aggregation =====
     const dataAggregator = {
         async getConversationHistory({ userId, otherUserId }) {
             try {
@@ -310,7 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     postMap[postId] = { postId, authorId, postContent, timestamp, isStory, expiryTimestamp, storyDuration };
                 });
 
-                // Merge Local Pending Posts
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const now = Date.now();
                     state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
@@ -319,7 +315,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Filter Feed Items
                 const feedItems = {};
                 Object.values(postMap).forEach(post => {
                     const authorId = post.authorId;
@@ -398,7 +393,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Calculate unread counts
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
@@ -596,7 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (userId === currentUserId) relationship = 'Self';
                 
                 user.relationship = relationship;
-                console.log(`🔒 Privacy Check for ${user.username}: ${user.profilePrivacy}`); 
 
                 return { user };
             } catch (error) {
@@ -684,10 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deletedCommentIds: new Set(),
         photoLibrary: [],
         localPendingPosts: [],
-        pendingOverrides: {
-            likes: {},
-            follows: {}
-        },
+        pendingOverrides: { likes: {}, follows: {} },
         pendingCommentImages: {},
         pendingCommentDrafts: {}
     };
@@ -794,21 +784,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (readActions.includes(action) || (method === 'GET' && action !== 'login')) {
                 try {
-                    console.log(`📊 Attempting to fetch ${action} from TSV (FAST!)`);
                     let result;
                     if (typeof dataAggregator[action] === 'function') {
                         result = await dataAggregator[action](body);
                     } else {
                         throw new Error(`TSV action ${action} not implemented`);
                     }
-                    console.log(`✅ TSV fetch successful for ${action}`);
                     return result;
                 } catch (tsvError) {
-                    console.warn(`⚠️ TSV fetch failed for ${action}, falling back to Apps Script:`, tsvError);
+                    console.warn(`TSV fetch failed for ${action}, falling back:`, tsvError);
                     return await this.enqueue(action, body, method);
                 }
             }
-            console.log(`✍️ Enqueueing WRITE operation ${action}`);
             return await this.enqueue(action, body, method);
         },
 
@@ -929,10 +916,8 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         renderProfilePage() {
             if (!state.profileUser) return;
-
             const isBlockedLocally = state.localBlocklist.has(state.profileUser.userId);
 
-            // --- 1. Handle Suspended/Banned Users (NEW CENTERED BOX DESIGN) ---
             if (state.profileUser.isSuspended || state.profileUser.banDetails) {
                 const pfpUrl = sanitizeHTML(state.profileUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.profileUser.username}`;
                 document.getElementById('profile-content').innerHTML = `
@@ -945,13 +930,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="material-symbols-rounded" style="color: var(--error-color);">block</span>
                         <h3>Account Suspended</h3>
                         <p>This account has been banned for violating our Terms of Service.</p>
-                    </div>
-                `;
+                    </div>`;
                 document.getElementById('profile-feed').innerHTML = '';
                 return;
             }
 
-            // 2. Handle Blocked Users (Locally blocked)
             if (isBlockedLocally) {
                 document.getElementById('profile-content').innerHTML = `<p style="text-align:center; padding: 40px; color:var(--secondary-text-color);">You have blocked this user.</p>`;
                 document.getElementById('profile-feed').innerHTML = '';
@@ -961,7 +944,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const isOwnProfile = state.currentUser?.userId === state.profileUser.userId;
             const pfpUrl = sanitizeHTML(state.profileUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.profileUser.username}`;
             const postCount = state.posts.filter(p => p.userId === state.profileUser.userId).length;
-
             let actionButtonHTML = '';
             let optionsMenuHTML = '';
 
@@ -973,10 +955,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 else followButton = `<button id="follow-btn" class="primary">Follow</button>`;
 
                 actionButtonHTML = followButton;
-
                 if (state.profileUser.profilePrivacy !== 'private' || relationship === 'Friends') {
-                    const messageButton = `<button id="message-user-btn" class="secondary">Message</button>`;
-                    actionButtonHTML += ` ${messageButton}`;
+                    actionButtonHTML += ` <button id="message-user-btn" class="secondary">Message</button>`;
                 }
 
                 optionsMenuHTML = `
@@ -987,13 +967,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="block-btn" data-action="block-user" data-user-id="${state.profileUser.userId}">Block User</button>
                             ${state.currentUser.isAdmin ? `<button class="delete-btn" data-action="ban-user" data-user-id="${state.profileUser.userId}">🛡️ Ban User</button>` : ''}
                         </div>
-                    </div>
-                `;
+                    </div>`;
             } else {
                 actionButtonHTML = `<button id="edit-profile-btn" class="secondary">Edit Profile</button>`;
             }
 
-            // 3. PRIVATE PROFILE LOGIC
             const isPrivate = String(state.profileUser.profilePrivacy).trim().toLowerCase() === 'private';
             const isAuthorized = isOwnProfile || state.profileUser.relationship === 'Friends';
 
@@ -1023,15 +1001,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             document.getElementById('profile-content').innerHTML = headerHTML;
 
-            // 4. Content Decision
             if (isPrivate && !isAuthorized) {
                 document.getElementById('profile-content').innerHTML += `
                     <div class="private-profile-message">
                         <span class="material-symbols-rounded">lock</span>
                         <h3>This Account is Private</h3>
                         <p>Follow this account to see their photos and videos.</p>
-                    </div>
-                `;
+                    </div>`;
                 document.getElementById('profile-feed').innerHTML = '';
             } else {
                 this.renderFeed(state.posts.filter(p => p.userId === state.profileUser.userId), document.getElementById('profile-feed'), false);
@@ -1041,9 +1017,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const postElement = document.querySelector(`#profile-feed .post[data-post-id="${postIdToScroll}"]`);
                         if (postElement) {
                             postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            const warningColor = getComputedStyle(document.documentElement).getPropertyValue('--warning-color');
                             postElement.style.transition = 'background-color 1s ease';
-                            postElement.style.backgroundColor = `${warningColor}4D`;
+                            postElement.style.backgroundColor = `var(--warning-color)4D`;
                             setTimeout(() => { postElement.style.backgroundColor = ''; }, 2500);
                         }
                     }, 200);
@@ -1279,27 +1254,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const profileLinkContent = `<img src="${pfp}" class="pfp pfp-sm"> <span>${sanitizeHTML(otherUser.displayName)} ${!otherUser.isGroup && String(otherUser.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>`;
             const profileLink = otherUser.isGroup ? `<div>${profileLinkContent}</div>` : `<a href="#" class="profile-link" data-user-id="${otherUser.userId}">${profileLinkContent}</a>`;
 
-            // Check if the conversation view structure already exists
             const existingHeader = document.getElementById('conversation-header');
             const existingMessagesList = document.getElementById('messages-list');
             const existingForm = document.getElementById('message-input-form');
 
-            // If elements exist, we only update the header info and the message list content
-            // This prevents the input box (form) from resetting or losing focus
             if (existingHeader && existingMessagesList && existingForm) {
-                // Update Header
                 existingHeader.innerHTML = `<button id="back-to-convos-btn"><span class="material-symbols-rounded">arrow_back_ios_new</span></button> ${profileLink}`;
-                
-                // Update Messages (Smart Scroll)
                 const isScrolledToBottom = existingMessagesList.scrollHeight - existingMessagesList.scrollTop <= existingMessagesList.clientHeight + 100;
-                
                 existingMessagesList.innerHTML = state.currentConversation.messages.map(msg => this.createMessageBubble(msg)).join('');
-                
                 if (isScrolledToBottom) {
                     existingMessagesList.scrollTop = existingMessagesList.scrollHeight;
                 }
             } else {
-                // Initial Render (Structure + Content)
                 conversationView.innerHTML = ` 
                     <div id="conversation-header"> 
                         <button id="back-to-convos-btn"><span class="material-symbols-rounded">arrow_back_ios_new</span></button> 
@@ -1312,8 +1278,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required> 
                         <button type="submit" class="primary">Send</button> 
                     </form> `;
-                
-                // Scroll to bottom on first load
                 const newMessagesList = document.getElementById('messages-list');
                 if (newMessagesList) {
                     newMessagesList.scrollTop = newMessagesList.scrollHeight;
@@ -1322,8 +1286,29 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         createMessageBubble(message) {
             const isSent = message.senderId === state.currentUser.userId;
-            let statusHTML = ''; let wrapperContent = '';
-            if (isSent) { if (message.status === 'sent') { statusHTML = '<div class="message-status">Sent</div>'; } else if (message.status === 'sending') { statusHTML = '<div class="message-status">Sending...</div>'; } else if (message.status === 'failed') { statusHTML = '<div class="message-status error">Failed to send</div>'; } const optionsMenuHTML = ` <div class="message-options"> <button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button> <div class="options-menu hidden"> <button class="delete-btn" data-action="delete-message" data-message-id="${message.messageId}">Unsend</button> </div> </div> `; wrapperContent = ` <div class="message-bubble sent">${sanitizeHTML(message.messageContent)}</div> ${optionsMenuHTML} `; } else { wrapperContent = `<div class="message-bubble received">${sanitizeHTML(message.messageContent)}</div>`; }
+            let statusHTML = ''; 
+            let wrapperContent = '';
+            
+            if (isSent) { 
+                if (message.status === 'sent') { 
+                    statusHTML = '<div class="message-status">Sent</div>'; 
+                } else if (message.status === 'sending') { 
+                    statusHTML = '<div class="message-status">Sending...</div>'; 
+                } else if (message.status === 'failed') { 
+                    statusHTML = '<div class="message-status error">Failed to send</div>'; 
+                } 
+                
+                const optionsMenuHTML = ` 
+                    <div class="message-options"> 
+                        <button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button> 
+                        <div class="options-menu hidden"> 
+                            <button class="delete-btn" data-action="delete-message" data-message-id="${message.messageId}">Unsend</button> 
+                        </div> 
+                    </div> `; 
+                wrapperContent = ` <div class="message-bubble sent">${sanitizeHTML(message.messageContent)}</div> ${optionsMenuHTML} `; 
+            } else { 
+                wrapperContent = `<div class="message-bubble received">${sanitizeHTML(message.messageContent)}</div>`; 
+            }
             return `<div class="message-wrapper ${isSent ? 'sent' : 'received'}" data-message-id="${message.messageId}"> ${wrapperContent} </div> ${isSent ? statusHTML : ''}`;
         },
     };
@@ -1347,7 +1332,30 @@ document.addEventListener('DOMContentLoaded', () => {
             core.updateNotificationDot();
             ids.forEach(id => api.call('deleteNotification', { userId: state.currentUser.userId, notificationId: id }));
         },
-        async login() { ui.hideError('login-error'); const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; if (!username || !password) return ui.showError('login-error', 'All fields required.'); ui.setButtonState('login-btn', 'Logging In...', true); try { const { user } = await api.call('login', { username, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); await core.initializeApp(); } catch (e) { if (e.message === 'ACCOUNT_BANNED') { ui.renderBanPage(e.banDetails); core.navigateTo('suspended'); } else if (e.message === 'SERVER_OUTAGE') { core.logout(false); core.navigateTo('outage'); } else { ui.showError('login-error', e.message); } } finally { ui.setButtonState('login-btn', 'Log In', false); } },
+        async login() { 
+            ui.hideError('login-error'); 
+            const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; 
+            if (!username || !password) return ui.showError('login-error', 'All fields required.'); 
+            ui.setButtonState('login-btn', 'Logging In...', true); 
+            try { 
+                const { user } = await api.call('login', { username, password }); 
+                state.currentUser = user; 
+                localStorage.setItem('currentUser', JSON.stringify(user)); 
+                await core.initializeApp(); 
+            } catch (e) { 
+                if (e.message === 'ACCOUNT_BANNED') { 
+                    ui.renderBanPage(e.banDetails); 
+                    core.navigateTo('suspended'); 
+                } else if (e.message === 'SERVER_OUTAGE') { 
+                    core.logout(false); 
+                    core.navigateTo('outage'); 
+                } else { 
+                    ui.showError('login-error', e.message); 
+                } 
+            } finally { 
+                ui.setButtonState('login-btn', 'Log In', false); 
+            } 
+        },
         async register() {
             ui.hideError('register-error');
             const [username, displayName, password] = [
@@ -1623,15 +1631,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.isConversationLoading) return;
             if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
             
-            // UI Updates for Sidebar (Add active class without rebuilding list)
             const convosListEl = document.getElementById('conversations-list');
             convosListEl.classList.add('is-loading');
             
-            // Manually toggle active class
             document.querySelectorAll('.conversation-item').forEach(item => {
                 if (item.dataset.userId === otherUserId) {
                     item.classList.add('active');
-                    // Update visual read status immediately
                     const dot = item.querySelector('.unread-dot');
                     if(dot) dot.remove();
                 } else {
@@ -1648,7 +1653,6 @@ document.addEventListener('DOMContentLoaded', () => {
             core.updateMessageDot();
             document.querySelector('.messages-container').classList.add('show-chat-view');
             
-            // Clear only the messages list area, or show loading there, keep structure if possible
             const view = document.getElementById('conversation-view');
             const msgList = document.getElementById('messages-list');
             
@@ -1689,7 +1693,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (messageIndex > -1) { state.currentConversation.messages[messageIndex].status = 'failed'; ui.renderConversationHistory(); }
             }
         },
-        async deleteMessage(messageId) { if (!confirm("Unsend message?")) return; const messageWrapper = document.querySelector(`.message-wrapper[data-message-id="${messageId}"]`); if (!messageWrapper) return; messageWrapper.style.opacity = '0.5'; try { await api.call('deleteMessage', { userId: state.currentUser.userId, messageId }); const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === messageId); if (messageIndex > -1) state.currentConversation.messages.splice(messageIndex, 1); messageWrapper.remove(); } catch (e) { alert(`Error: ${e.message}`); messageWrapper.style.opacity = '1'; } },
+        async deleteMessage(messageId) { 
+            if (!confirm("Unsend message?")) return; 
+            const messageWrapper = document.querySelector(`.message-wrapper[data-message-id="${messageId}"]`); 
+            if (!messageWrapper) return; 
+            messageWrapper.style.opacity = '0.5'; 
+            try { 
+                await api.call('deleteMessage', { userId: state.currentUser.userId, messageId }); 
+                const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === messageId); 
+                if (messageIndex > -1) state.currentConversation.messages.splice(messageIndex, 1); 
+                messageWrapper.remove(); 
+            } catch (e) { 
+                alert(`Error: ${e.message}`); 
+                messageWrapper.style.opacity = '1'; 
+            } 
+        },
         async pollNewMessages(otherUserId) {
             if (state.currentView !== 'messages' || state.currentConversation.id !== otherUserId) { if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); return; }
             try {
@@ -1921,12 +1939,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const formatTimestamp = (post) => {
         const timestampStr = post.timestamp;
         if (!timestampStr) return '';
-        
-        // Safety check for empty or invalid timestamps
         if (typeof timestampStr === 'string' && timestampStr.trim() === '') return '';
         
         const date = new Date(timestampStr);
-        if (isNaN(date.getTime())) return ''; // Fix for "Invalid Date"
+        if (isNaN(date.getTime())) return '';
 
         const now = new Date();
         const secondsAgo = Math.round((now - date) / 1000);
@@ -1939,6 +1955,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (daysAgo <= 14) return `${daysAgo}d ago`;
         return date.toLocaleDateString('en-us', { month: 'short', day: 'numeric' });
     };
+    
     const sanitizeHTML = (str) => { if (!str) return ''; const temp = document.createElement('div'); temp.textContent = str; return temp.innerHTML; };
+    
     core.main();
 });
