@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const lines = tsvText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
 
-            // TRIM HEADERS to fix "invisible space" issues in Google Sheets
             const headers = lines[0].split('\t').map(h => h.trim());
             const data = [];
 
@@ -65,11 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Helper: Get column value case-insensitively (Fixes "Invalid Date" and "Privacy" bugs)
     const getColumn = (row, ...keys) => {
         for (const key of keys) {
             if (row[key] !== undefined && row[key] !== '') return row[key];
-            // Case-insensitive check
             const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
             if (foundKey) return row[foundKey];
         }
@@ -85,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tsvParser.fetchSheet('accounts')
                 ]);
                 const messages = [];
-                // FIX: Cast to strings for safe comparison
+                // Ensure IDs are strings for safe comparison
                 const currentUserId = String(userId);
                 const targetUserId = String(otherUserId);
 
@@ -100,12 +97,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const recipientId = String(row['recipientID'] || row['recipientId']);
                     const encodedContent = row['messageContent'];
                     
-                    // FIX: Use getColumn for robust timestamp fetching
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
                     const isRead = row['isRead'];
 
                     let isMatch = false;
-                    // FIX: Compare strings
                     if ((senderId === currentUserId && recipientId === targetUserId) || 
                         (senderId === targetUserId && recipientId === currentUserId)) {
                         isMatch = true;
@@ -160,7 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     tsvParser.fetchSheet('photoLibrary')
                 ]);
 
-                // Server Status Check
                 let isOutage = false;
                 let bannerText = '';
                 let isCurrentUserOutageExempt = false;
@@ -192,7 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
-                // Build Maps
                 const now = new Date();
                 const banMap = {};
                 bans.forEach(row => {
@@ -236,7 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const postId = row['postID'];
                     const userId = row['userID'];
                     const commentText = row['commentText'];
-                    
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
 
                     if (!commentsByPostMap[postId]) commentsByPostMap[postId] = [];
@@ -266,32 +258,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 const userMap = {};
                 accounts.forEach(row => {
                     const userId = row['userID'] || row['userId'];
-                    const username = row['username'];
-                    const displayName = row['displayName'];
-                    const profilePictureUrl = row['profilePictureUrl'] || '';
-                    const description = row['description'] || '';
-                    const isVerified = row['isVerified'] || 'FALSE';
-                    const postVisibility = row['firePostVisibility'] || 'Everyone';
+                    const rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
                     
-                    let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
-                    const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
-
-                    const isAdmin = String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
-
                     const userPostIds = postsByUserMap[userId] || [];
                     let totalLikes = 0;
                     userPostIds.forEach(postId => {
                         totalLikes += (likesByPostMap[postId] || []).length;
                     });
 
-                    const banDetails = banMap[username] || null;
-
                     userMap[userId] = {
-                        userId, username, displayName, profilePictureUrl, description,
-                        isVerified, banDetails, postVisibility, profilePrivacy,
+                        userId, 
+                        username: row['username'], 
+                        displayName: row['displayName'], 
+                        profilePictureUrl: row['profilePictureUrl'] || '', 
+                        description: row['description'] || '',
+                        isVerified: row['isVerified'] || 'FALSE', 
+                        postVisibility: row['firePostVisibility'] || 'Everyone',
+                        profilePrivacy: String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public',
+                        isAdmin: String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE',
+                        banDetails: banMap[row['username']] || null,
                         followers: (followersMap[userId] || []).length,
                         following: (followingMap[userId] || []).length,
-                        totalLikes, isAdmin
+                        totalLikes
                     };
                 });
 
@@ -316,7 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     postMap[postId] = { postId, authorId, postContent, timestamp, isStory, expiryTimestamp, storyDuration };
                 });
 
-                // Merge Local Pending Posts
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const now = Date.now();
                     state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
@@ -325,7 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Filter Feed Items
                 const feedItems = {};
                 Object.values(postMap).forEach(post => {
                     const authorId = post.authorId;
@@ -404,7 +390,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Calculate unread counts
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
