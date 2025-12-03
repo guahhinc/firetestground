@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const lines = tsvText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
 
+            // TRIM HEADERS to fix "invisible space" issues in Google Sheets
             const headers = lines[0].split('\t').map(h => h.trim());
             const data = [];
 
@@ -64,9 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Helper: Get column value case-insensitively (Fixes "Invalid Date" and "Privacy" bugs)
     const getColumn = (row, ...keys) => {
         for (const key of keys) {
             if (row[key] !== undefined && row[key] !== '') return row[key];
+            // Case-insensitive check
             const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
             if (foundKey) return row[foundKey];
         }
@@ -82,9 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tsvParser.fetchSheet('accounts')
                 ]);
                 const messages = [];
-                // Ensure IDs are strings for safe comparison
-                const currentUserId = String(userId);
-                const targetUserId = String(otherUserId);
+                const currentUserId = userId;
 
                 const userMap = {};
                 accounts.forEach(row => {
@@ -93,16 +94,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 messagesData.forEach(row => {
                     const msgId = row['messageID'] || row['messageId'];
-                    const senderId = String(row['senderID'] || row['senderId']);
-                    const recipientId = String(row['recipientID'] || row['recipientId']);
+                    const senderId = row['senderID'] || row['senderId'];
+                    const recipientId = row['recipientID'] || row['recipientId'];
                     const encodedContent = row['messageContent'];
-                    
-                    const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
+                    const timestamp = row['timestamp'];
                     const isRead = row['isRead'];
 
                     let isMatch = false;
-                    if ((senderId === currentUserId && recipientId === targetUserId) || 
-                        (senderId === targetUserId && recipientId === currentUserId)) {
+                    if ((senderId === currentUserId && recipientId === otherUserId) || (senderId === otherUserId && recipientId === currentUserId)) {
                         isMatch = true;
                     }
 
@@ -155,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tsvParser.fetchSheet('photoLibrary')
                 ]);
 
+                // Server Status Check
                 let isOutage = false;
                 let bannerText = '';
                 let isCurrentUserOutageExempt = false;
@@ -186,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
+                // Build Maps
                 const now = new Date();
                 const banMap = {};
                 bans.forEach(row => {
@@ -229,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const postId = row['postID'];
                     const userId = row['userID'];
                     const commentText = row['commentText'];
+                    
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
 
                     if (!commentsByPostMap[postId]) commentsByPostMap[postId] = [];
@@ -258,28 +260,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 const userMap = {};
                 accounts.forEach(row => {
                     const userId = row['userID'] || row['userId'];
-                    const rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
+                    const username = row['username'];
+                    const displayName = row['displayName'];
+                    const profilePictureUrl = row['profilePictureUrl'] || '';
+                    const description = row['description'] || '';
+                    const isVerified = row['isVerified'] || 'FALSE';
+                    const postVisibility = row['firePostVisibility'] || 'Everyone';
                     
+                    let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
+                    const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
+
+                    const isAdmin = String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
+
                     const userPostIds = postsByUserMap[userId] || [];
                     let totalLikes = 0;
                     userPostIds.forEach(postId => {
                         totalLikes += (likesByPostMap[postId] || []).length;
                     });
 
+                    const banDetails = banMap[username] || null;
+
                     userMap[userId] = {
-                        userId, 
-                        username: row['username'], 
-                        displayName: row['displayName'], 
-                        profilePictureUrl: row['profilePictureUrl'] || '', 
-                        description: row['description'] || '',
-                        isVerified: row['isVerified'] || 'FALSE', 
-                        postVisibility: row['firePostVisibility'] || 'Everyone',
-                        profilePrivacy: String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public',
-                        isAdmin: String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE',
-                        banDetails: banMap[row['username']] || null,
+                        userId, username, displayName, profilePictureUrl, description,
+                        isVerified, banDetails, postVisibility, profilePrivacy,
                         followers: (followersMap[userId] || []).length,
                         following: (followingMap[userId] || []).length,
-                        totalLikes
+                        totalLikes, isAdmin
                     };
                 });
 
@@ -304,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     postMap[postId] = { postId, authorId, postContent, timestamp, isStory, expiryTimestamp, storyDuration };
                 });
 
+                // Merge Local Pending Posts
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const now = Date.now();
                     state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
@@ -312,6 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
+                // Filter Feed Items
                 const feedItems = {};
                 Object.values(postMap).forEach(post => {
                     const authorId = post.authorId;
@@ -390,6 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
+                // Calculate unread counts
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
@@ -587,6 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (userId === currentUserId) relationship = 'Self';
                 
                 user.relationship = relationship;
+                console.log(`🔒 Privacy Check for ${user.username}: ${user.profilePrivacy}`); 
 
                 return { user };
             } catch (error) {
@@ -784,17 +794,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (readActions.includes(action) || (method === 'GET' && action !== 'login')) {
                 try {
+                    console.log(`📊 Attempting to fetch ${action} from TSV (FAST!)`);
                     let result;
                     if (typeof dataAggregator[action] === 'function') {
                         result = await dataAggregator[action](body);
                     } else {
                         throw new Error(`TSV action ${action} not implemented`);
                     }
+                    console.log(`✅ TSV fetch successful for ${action}`);
                     return result;
                 } catch (tsvError) {
+                    console.warn(`⚠️ TSV fetch failed for ${action}, falling back to Apps Script:`, tsvError);
                     return await this.enqueue(action, body, method);
                 }
             }
+            console.log(`✍️ Enqueueing WRITE operation ${action}`);
             return await this.enqueue(action, body, method);
         },
 
@@ -1250,75 +1264,64 @@ document.addEventListener('DOMContentLoaded', () => {
         showError(elId, msg) { const el = document.getElementById(elId); el.textContent = msg; el.classList.remove('hidden'); },
         hideError(elId) { document.getElementById(elId).classList.add('hidden'); },
         setButtonState(btnId, text, disabled) { const btn = document.getElementById(btnId); if (btn) { btn.textContent = text; btn.disabled = disabled; } },
-        renderMessagesPage() { 
-            this.renderConversationsList(); 
-            // FIX: If there is an ID, render the history
-            if (state.currentConversation.id) { 
-                this.renderConversationHistory(); 
-            } else { 
-                document.getElementById('conversation-view').innerHTML = ` <div id="conversation-placeholder"> <span class="material-symbols-rounded">chat</span> <h3>Your Messages</h3> <p>Select a conversation or start a new one.</p> </div>`; 
-            } 
-        },
-        renderConversationsList() { 
-            const container = document.getElementById('conversations-list'); 
-            let headerHTML = `<div id="conversations-list-header"><h3>Messages</h3></div>`; 
-            let listHTML = ''; 
-            if (state.conversations.length === 0) { 
-                listHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 15px;">No conversations yet.</p>'; 
-            } else { 
-                listHTML = state.conversations.map(convo => { 
-                    // FIX: String comparison for active class
-                    const isActive = String(convo.otherUser.userId) === String(state.currentConversation.id); 
-                    const pfp = sanitizeHTML(convo.otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${convo.otherUser.displayName}`; 
-                    return ` <div class="conversation-item ${isActive ? 'active' : ''}" data-user-id="${convo.otherUser.userId}" data-is-group="${convo.otherUser.isGroup || false}"> <img src="${pfp}" class="pfp pfp-sm"> <div class="convo-details"> <div class="username">${sanitizeHTML(convo.otherUser.displayName)}</div> <div class="last-message">${sanitizeHTML(convo.lastMessage)}</div> </div> ${convo.unreadCount > 0 ? '<div class="unread-dot"></div>' : ''} </div> `; 
-                }).join(''); 
-            } 
-            container.innerHTML = headerHTML + `<div id="conversations-list-body">${listHTML}</div>`; 
-        },
+        renderMessagesPage() { this.renderConversationsList(); if (state.currentConversation.id) { this.renderConversationHistory(); } else { document.getElementById('conversation-view').innerHTML = ` <div id="conversation-placeholder"> <span class="material-symbols-rounded">chat</span> <h3>Your Messages</h3> <p>Select a conversation or start a new one.</p> </div>`; } },
+        renderConversationsList() { const container = document.getElementById('conversations-list'); let headerHTML = `<div id="conversations-list-header"><h3>Messages</h3></div>`; let listHTML = ''; if (state.conversations.length === 0) { listHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 15px;">No conversations yet.</p>'; } else { listHTML = state.conversations.map(convo => { const isActive = convo.otherUser.userId === state.currentConversation.id; const pfp = sanitizeHTML(convo.otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${convo.otherUser.displayName}`; return ` <div class="conversation-item ${isActive ? 'active' : ''}" data-user-id="${convo.otherUser.userId}" data-is-group="${convo.otherUser.isGroup || false}"> <img src="${pfp}" class="pfp pfp-sm"> <div class="convo-details"> <div class="username">${sanitizeHTML(convo.otherUser.displayName)}</div> <div class="last-message">${sanitizeHTML(convo.lastMessage)}</div> </div> ${convo.unreadCount > 0 ? '<div class="unread-dot"></div>' : ''} </div> `; }).join(''); } container.innerHTML = headerHTML + `<div id="conversations-list-body">${listHTML}</div>`; },
         renderConversationHistory() {
             const conversationView = document.getElementById('conversation-view');
+            const otherUser = state.conversations.find(c => c.otherUser.userId === state.currentConversation.id)?.otherUser;
             
-            // FIX: DO NOT Rebuild the entire view if the input form already exists.
-            // This prevents the input box from losing focus when a new message arrives.
-            if (!document.getElementById('message-input-form')) {
-                const otherUser = state.conversations.find(c => String(c.otherUser.userId) === String(state.currentConversation.id))?.otherUser;
-                if (!otherUser) { 
-                    conversationView.innerHTML = `<div id="conversation-placeholder"><p>Could not load conversation.</p></div>`; 
-                    return; 
-                }
-                const pfp = sanitizeHTML(otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${otherUser.displayName}`;
-                const profileLinkContent = `<img src="${pfp}" class="pfp pfp-sm"> <span>${sanitizeHTML(otherUser.displayName)} ${!otherUser.isGroup && String(otherUser.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>`;
-                const profileLink = otherUser.isGroup ? `<div>${profileLinkContent}</div>` : `<a href="#" class="profile-link" data-user-id="${otherUser.userId}">${profileLinkContent}</a>`;
+            if (!otherUser) { 
+                conversationView.innerHTML = `<div id="conversation-placeholder"><p>Could not load conversation.</p></div>`; 
+                return; 
+            }
+
+            const pfp = sanitizeHTML(otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${otherUser.displayName}`;
+            const profileLinkContent = `<img src="${pfp}" class="pfp pfp-sm"> <span>${sanitizeHTML(otherUser.displayName)} ${!otherUser.isGroup && String(otherUser.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>`;
+            const profileLink = otherUser.isGroup ? `<div>${profileLinkContent}</div>` : `<a href="#" class="profile-link" data-user-id="${otherUser.userId}">${profileLinkContent}</a>`;
+
+            // Check if the conversation view structure already exists
+            const existingHeader = document.getElementById('conversation-header');
+            const existingMessagesList = document.getElementById('messages-list');
+            const existingForm = document.getElementById('message-input-form');
+
+            // If elements exist, we only update the header info and the message list content
+            // This prevents the input box (form) from resetting or losing focus
+            if (existingHeader && existingMessagesList && existingForm) {
+                // Update Header
+                existingHeader.innerHTML = `<button id="back-to-convos-btn"><span class="material-symbols-rounded">arrow_back_ios_new</span></button> ${profileLink}`;
                 
+                // Update Messages (Smart Scroll)
+                const isScrolledToBottom = existingMessagesList.scrollHeight - existingMessagesList.scrollTop <= existingMessagesList.clientHeight + 100;
+                
+                existingMessagesList.innerHTML = state.currentConversation.messages.map(msg => this.createMessageBubble(msg)).join('');
+                
+                if (isScrolledToBottom) {
+                    existingMessagesList.scrollTop = existingMessagesList.scrollHeight;
+                }
+            } else {
+                // Initial Render (Structure + Content)
                 conversationView.innerHTML = ` 
                     <div id="conversation-header"> 
                         <button id="back-to-convos-btn"><span class="material-symbols-rounded">arrow_back_ios_new</span></button> 
                         ${profileLink} 
                     </div> 
-                    <div id="messages-list"></div> 
+                    <div id="messages-list">
+                        ${state.currentConversation.messages.map(msg => this.createMessageBubble(msg)).join('')}
+                    </div> 
                     <form id="message-input-form"> 
                         <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required> 
                         <button type="submit" class="primary">Send</button> 
-                    </form> 
-                `;
-            }
-
-            // Only update the message bubbles
-            const messagesListEl = document.getElementById('messages-list');
-            if (messagesListEl) {
-                // Check if user is near bottom before updating
-                const isAtBottom = messagesListEl.scrollHeight - messagesListEl.scrollTop <= messagesListEl.clientHeight + 100;
-
-                messagesListEl.innerHTML = state.currentConversation.messages.map(msg => this.createMessageBubble(msg)).join('');
+                    </form> `;
                 
-                // Auto scroll if they were already at the bottom or if it's a fresh load
-                if (isAtBottom || messagesListEl.scrollTop === 0) {
-                    messagesListEl.scrollTop = messagesListEl.scrollHeight;
+                // Scroll to bottom on first load
+                const newMessagesList = document.getElementById('messages-list');
+                if (newMessagesList) {
+                    newMessagesList.scrollTop = newMessagesList.scrollHeight;
                 }
             }
         },
         createMessageBubble(message) {
-            const isSent = String(message.senderId) === String(state.currentUser.userId);
+            const isSent = message.senderId === state.currentUser.userId;
             let statusHTML = ''; let wrapperContent = '';
             if (isSent) { if (message.status === 'sent') { statusHTML = '<div class="message-status">Sent</div>'; } else if (message.status === 'sending') { statusHTML = '<div class="message-status">Sending...</div>'; } else if (message.status === 'failed') { statusHTML = '<div class="message-status error">Failed to send</div>'; } const optionsMenuHTML = ` <div class="message-options"> <button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button> <div class="options-menu hidden"> <button class="delete-btn" data-action="delete-message" data-message-id="${message.messageId}">Unsend</button> </div> </div> `; wrapperContent = ` <div class="message-bubble sent">${sanitizeHTML(message.messageContent)}</div> ${optionsMenuHTML} `; } else { wrapperContent = `<div class="message-bubble received">${sanitizeHTML(message.messageContent)}</div>`; }
             return `<div class="message-wrapper ${isSent ? 'sent' : 'received'}" data-message-id="${message.messageId}"> ${wrapperContent} </div> ${isSent ? statusHTML : ''}`;
@@ -1618,22 +1621,43 @@ document.addEventListener('DOMContentLoaded', () => {
         async loadMessagesView() { core.navigateTo('messages'); ui.renderMessagesPage(); },
         async loadConversation(otherUserId) {
             if (state.isConversationLoading) return;
-            // FIX: String comparison
-            if (String(state.currentConversation.id) === String(otherUserId) && state.currentView === 'messages') return;
-            
             if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
+            
+            // UI Updates for Sidebar (Add active class without rebuilding list)
             const convosListEl = document.getElementById('conversations-list');
             convosListEl.classList.add('is-loading');
+            
+            // Manually toggle active class
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                if (item.dataset.userId === otherUserId) {
+                    item.classList.add('active');
+                    // Update visual read status immediately
+                    const dot = item.querySelector('.unread-dot');
+                    if(dot) dot.remove();
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+
             state.isConversationLoading = true;
             state.currentConversation = { id: otherUserId, messages: [], isGroup: false };
-            const convo = state.conversations.find(c => String(c.otherUser.userId) === String(otherUserId));
+            
+            const convo = state.conversations.find(c => c.otherUser.userId === otherUserId);
             if (convo) convo.unreadCount = 0;
+            
             core.updateMessageDot();
             document.querySelector('.messages-container').classList.add('show-chat-view');
-            ui.renderMessagesPage();
             
-            document.getElementById('conversation-view').innerHTML = '<div id="messages-list" style="display: flex; justify-content: center; align-items: center; height: 100%;"><p>Loading messages...</p></div>';
+            // Clear only the messages list area, or show loading there, keep structure if possible
+            const view = document.getElementById('conversation-view');
+            const msgList = document.getElementById('messages-list');
             
+            if (msgList) {
+                msgList.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 100%;"><p>Loading messages...</p></div>';
+            } else {
+                view.innerHTML = '<div id="messages-list" style="display: flex; justify-content: center; align-items: center; height: 100%;"><p>Loading messages...</p></div>';
+            }
+
             try {
                 const { messages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
                 state.currentConversation.messages = messages.map(m => ({ ...m, status: 'sent' }));
@@ -1654,15 +1678,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!messageContent || !recipientId) return;
             const tempId = `temp_${Date.now()}`;
             const tempMessage = { messageId: tempId, senderId: state.currentUser.userId, messageContent, status: 'sending', senderName: state.currentUser.displayName, timestamp: new Date().toISOString() };
-            
             input.value = ''; input.focus();
             state.currentConversation.messages.push(tempMessage);
-            ui.renderConversationHistory(); // This now ONLY updates the list, not the whole input box
-
+            ui.renderConversationHistory();
             try {
-                // FIX: Base64 Encode message content
-                const encodedContent = btoa(messageContent);
-                await api.call('sendMessage', { senderId: state.currentUser.userId, recipientId, messageContent: encodedContent, isGroup: false });
+                await api.call('sendMessage', { senderId: state.currentUser.userId, recipientId, messageContent, isGroup: false });
                 setTimeout(() => handlers.pollNewMessages(recipientId), 1000);
             } catch (e) {
                 const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === tempId);
@@ -1671,32 +1691,13 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async deleteMessage(messageId) { if (!confirm("Unsend message?")) return; const messageWrapper = document.querySelector(`.message-wrapper[data-message-id="${messageId}"]`); if (!messageWrapper) return; messageWrapper.style.opacity = '0.5'; try { await api.call('deleteMessage', { userId: state.currentUser.userId, messageId }); const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === messageId); if (messageIndex > -1) state.currentConversation.messages.splice(messageIndex, 1); messageWrapper.remove(); } catch (e) { alert(`Error: ${e.message}`); messageWrapper.style.opacity = '1'; } },
         async pollNewMessages(otherUserId) {
-            // FIX: String comparison
-            if (state.currentView !== 'messages' || String(state.currentConversation.id) !== String(otherUserId)) { 
-                if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); 
-                return; 
-            }
+            if (state.currentView !== 'messages' || state.currentConversation.id !== otherUserId) { if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); return; }
             try {
                 const { messages: remoteMessages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
                 const newMessagesFormatted = remoteMessages.map(m => ({ ...m, status: 'sent' }));
-                
-                // FIX: Intelligent Deduplication
-                const pendingMessages = state.currentConversation.messages.filter(localMsg => {
-                    if (localMsg.status === 'failed') return true;
-                    if (localMsg.status === 'sending') {
-                        // Check if this local message now exists in the remote list (fuzzy match)
-                        const alreadyOnServer = newMessagesFormatted.some(remoteMsg => 
-                            remoteMsg.messageContent === localMsg.messageContent &&
-                            String(remoteMsg.senderId) === String(localMsg.senderId) &&
-                            Math.abs(new Date(remoteMsg.timestamp) - new Date(localMsg.timestamp)) < 10000 
-                        );
-                        return !alreadyOnServer; // Keep only if NOT on server yet
-                    }
-                    return false;
-                });
-
+                const pendingMessages = state.currentConversation.messages.filter(m => m.status === 'sending' || m.status === 'failed');
                 state.currentConversation.messages = [...newMessagesFormatted, ...pendingMessages];
-                ui.renderConversationHistory(); // Safe poll update
+                ui.renderConversationHistory();
                 api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId });
             } catch (e) { console.error("Polling failed:", e.message); }
         },
@@ -1900,7 +1901,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             document.getElementById('auth-view').addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; const activeForm = !document.getElementById('login-form').classList.contains('hidden') ? document.getElementById('login-form') : document.getElementById('register-form'); e.preventDefault(); const inputs = [...activeForm.querySelectorAll('input')]; const currentInputIndex = inputs.findIndex(input => input === document.activeElement); if (currentInputIndex > -1 && currentInputIndex < inputs.length - 1) inputs[currentInputIndex + 1].focus(); else activeForm.querySelector('button.primary').click(); });
         },
-        initializeApp() { 
+        async initializeApp() { 
             const savedUser = JSON.parse(localStorage.getItem('currentUser')); 
             if (!savedUser) { return core.navigateTo('auth'); } 
             state.currentUser = savedUser; 
