@@ -65,11 +65,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Helper: Get column value case-insensitively (Fixes "Invalid Date" and "Privacy" bugs)
+    // Helper: Get column value case-insensitively
     const getColumn = (row, ...keys) => {
         for (const key of keys) {
             if (row[key] !== undefined && row[key] !== '') return row[key];
-            // Case-insensitive check
             const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
             if (foundKey) return row[foundKey];
         }
@@ -222,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     likesByPostMap[postId].push({ likeId, userId });
                 });
 
-                // --- FIX: Robust Timestamp Parsing for Comments ---
+                // Build comments map
                 const commentsByPostMap = {};
                 comments.forEach(row => {
                     const commentId = row['commentID'];
@@ -232,7 +231,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userId = row['userID'];
                     const commentText = row['commentText'];
                     
-                    // Try multiple variations of the header to find the date
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
 
                     if (!commentsByPostMap[postId]) commentsByPostMap[postId] = [];
@@ -269,7 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isVerified = row['isVerified'] || 'FALSE';
                     const postVisibility = row['firePostVisibility'] || 'Everyone';
                     
-                    // --- FIX: Robust Privacy Column Check ---
                     let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
                     const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
 
@@ -313,7 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     postMap[postId] = { postId, authorId, postContent, timestamp, isStory, expiryTimestamp, storyDuration };
                 });
 
-                // Merge Local Pending Posts
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const now = Date.now();
                     state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
@@ -322,7 +318,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Filter Feed Items
                 const feedItems = {};
                 Object.values(postMap).forEach(post => {
                     const authorId = post.authorId;
@@ -401,7 +396,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Calculate unread counts
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
@@ -608,7 +602,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
 
-        // --- FIX: Search Function was previously disconnected ---
         async search({ query, currentUserId }) {
             try {
                 const [accounts, postsData] = await Promise.all([
@@ -1667,14 +1660,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
                 if (currentUserData) {
-                    if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
-                    if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
+                    // SAVE USER SESSION FIRST
                     state.currentUser = currentUserData;
                     state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
+                    
                     const navPfp = document.getElementById('nav-pfp');
                     if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
+
+                    // THEN CHECK STATUS
+                    if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
+                    if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
                 }
 
                 applyOptimisticUpdates(posts);
@@ -1857,14 +1854,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formatTimestamp = (post) => {
         const timestampStr = post.timestamp;
-        if (!timestampStr) return '';
-        
-        // Safety check for empty or invalid timestamps
-        if (typeof timestampStr === 'string' && timestampStr.trim() === '') return '';
-        
+        if (!timestampStr || (typeof timestampStr === 'string' && timestampStr.trim() === '')) return '';
         const date = new Date(timestampStr);
-        if (isNaN(date.getTime())) return ''; // Fix for "Invalid Date"
-
+        if (isNaN(date.getTime())) return ''; 
         const now = new Date();
         const secondsAgo = Math.round((now - date) / 1000);
         if (secondsAgo < 60) return 'just now';
