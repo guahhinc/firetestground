@@ -101,8 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isRead = row['isRead'];
 
                     let isMatch = false;
-                    if ((String(senderId) === String(currentUserId) && String(recipientId) === String(otherUserId)) || 
-                        (String(senderId) === String(otherUserId) && String(recipientId) === String(currentUserId))) {
+                    if ((senderId === currentUserId && recipientId === otherUserId) || (senderId === otherUserId && recipientId === currentUserId)) {
                         isMatch = true;
                     }
 
@@ -169,9 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Fix: Strict String Comparison for IDs
-                const currentUserRow = accounts.find(row => String(row['userID']) === String(currentUserId));
-                
+                const currentUserRow = accounts.find(row => row['userID'] === currentUserId);
                 if (currentUserRow) {
                     const isAdmin = String(currentUserRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
                     isCurrentUserOutageExempt = isAdmin;
@@ -225,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     likesByPostMap[postId].push({ likeId, userId });
                 });
 
-                // Build comments map (FIXED TIMESTAMP PARSING)
+                // --- FIX: Robust Timestamp Parsing for Comments ---
                 const commentsByPostMap = {};
                 comments.forEach(row => {
                     const commentId = row['commentID'];
@@ -235,14 +232,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userId = row['userID'];
                     const commentText = row['commentText'];
                     
-                    // Robust Timestamp Check using helper
+                    // Try multiple variations of the header to find the date
                     const timestamp = getColumn(row, 'timestamp', 'Timestamp', 'time stamp') || new Date().toISOString();
 
                     if (!commentsByPostMap[postId]) commentsByPostMap[postId] = [];
                     commentsByPostMap[postId].push({ commentId, postId, userId, commentText, timestamp });
                 });
 
-                // Build following/followers maps
                 const followingMap = {};
                 const followersMap = {};
                 followers.forEach(row => {
@@ -254,7 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     followersMap[followingId].push(String(followerId));
                 });
 
-                // Build posts by user map
                 const postsByUserMap = {};
                 postsData.forEach(row => {
                     const postId = row['postID'];
@@ -264,7 +259,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     postsByUserMap[userId].push(postId);
                 });
 
-                // Build user map
                 const userMap = {};
                 accounts.forEach(row => {
                     const userId = row['userID'] || row['userId'];
@@ -275,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isVerified = row['isVerified'] || 'FALSE';
                     const postVisibility = row['firePostVisibility'] || 'Everyone';
                     
-                    // ROBUST PRIVACY CHECK
+                    // --- FIX: Robust Privacy Column Check ---
                     let rawPrivacy = getColumn(row, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
                     const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
 
@@ -298,7 +292,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 });
 
-                // Get current user data
                 const currentUserBlockedSet = blockMap[currentUserId] || new Set();
                 const currentUserFollowingList = followingMap[String(currentUserId)] || [];
                 const currentUserFollowersList = followersMap[String(currentUserId)] || [];
@@ -307,7 +300,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return user ? { userId: user.userId, displayName: user.displayName, profilePictureUrl: user.profilePictureUrl } : null;
                 }).filter(Boolean);
 
-                // Build post map
                 const postMap = {};
                 postsData.forEach(row => {
                     const postId = row['postID'];
@@ -330,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Build feed items
+                // Filter Feed Items
                 const feedItems = {};
                 Object.values(postMap).forEach(post => {
                     const authorId = post.authorId;
@@ -338,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const author = userMap[authorId];
                     if (!author) return;
 
-                    const isOwnPost = String(authorId) === String(currentUserId);
+                    const isOwnPost = authorId === currentUserId;
                     const viewerFollowsAuthor = currentUserFollowingList.includes(String(authorId));
                     const authorFollowsViewer = (followingMap[authorId] || []).includes(String(currentUserId));
                     const areFriends = viewerFollowsAuthor && authorFollowsViewer;
@@ -368,7 +360,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return { ...author, ...item, comments: postComments, likes: postLikes, reposts: [] };
                 }).filter(Boolean);
 
-                // Build conversations
                 const conversationsMap = {};
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
@@ -384,8 +375,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     let conversationId = null;
                     let otherUser = null;
 
-                    if (String(senderId) === String(currentUserId) || String(recipientId) === String(currentUserId)) {
-                        const otherUserId = String(senderId) === String(currentUserId) ? recipientId : senderId;
+                    if (senderId === currentUserId || recipientId === currentUserId) {
+                        const otherUserId = senderId === currentUserId ? recipientId : senderId;
                         if (!currentUserBlockedSet.has(otherUserId) && !(blockMap[otherUserId] && blockMap[otherUserId].has(currentUserId))) {
                             conversationId = otherUserId;
                             otherUser = { ...userMap[otherUserId], isGroup: false };
@@ -404,18 +395,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             messageContent: decodedMessage, timestamp, isRead, status: 'sent'
                         });
                         if (new Date(timestamp) > new Date(convo.timestamp || 0)) {
-                            convo.lastMessage = String(senderId) === String(currentUserId) ? `You: ${decodedMessage}` : decodedMessage;
+                            convo.lastMessage = senderId === currentUserId ? `You: ${decodedMessage}` : decodedMessage;
                             convo.timestamp = timestamp;
                         }
                     }
                 });
 
+                // Calculate unread counts
                 messages.forEach(row => {
                     const senderId = row['senderID'] || row['senderId'];
                     const recipientId = row['recipientID'] || row['recipientId'];
                     const isRead = row['isRead'];
-                    if (String(senderId) === String(currentUserId)) return;
-                    if (String(recipientId) === String(currentUserId) && (isRead === 'FALSE' || isRead === false)) {
+                    if (senderId === currentUserId) return;
+                    if (recipientId === currentUserId && (isRead === 'FALSE' || isRead === false)) {
                         if (conversationsMap[senderId]) {
                             conversationsMap[senderId].unreadCount = (conversationsMap[senderId].unreadCount || 0) + 1;
                         }
@@ -616,6 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
 
+        // --- FIX: Search Function was previously disconnected ---
         async search({ query, currentUserId }) {
             try {
                 const [accounts, postsData] = await Promise.all([
@@ -1663,38 +1656,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.showFeedSkeleton(activeFeedEl);
             }
             try {
-                // 1. Fetch Data (Both posts and notifications)
                 const [postsAndConvosResult, notificationsResult] = await Promise.all([
                     api.call('getPosts', { userId: state.currentUser.userId }, 'GET'),
                     api.call('getNotifications', { userId: state.currentUser.userId }, 'GET')
                 ]);
-
-                // Destructure results
                 const { posts = [], conversations = [], currentUserFollowingList = [], currentUserFollowersList = [], blockedUsersList = [], currentUserData = null, bannerText = '', photoLibrary = [] } = postsAndConvosResult || {};
-                
-                // Set Banner
                 const banner = document.getElementById('global-banner');
                 const root = document.documentElement;
                 if (bannerText) { banner.textContent = bannerText; banner.classList.remove('hidden'); setTimeout(() => root.style.setProperty('--banner-height', `${banner.offsetHeight}px`), 0); }
                 else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
-                // --- CRITICAL FIX: SAVE SESSION FIRST ---
                 if (currentUserData) {
+                    if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
+                    if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
                     state.currentUser = currentUserData;
                     state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
-                    
-                    // Update Nav PFP
                     const navPfp = document.getElementById('nav-pfp');
                     if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
-                } else if (state.currentUser) {
-                    console.warn("Using cached user data (Server didn't return account details).");
-                } else {
-                    throw new Error("Session invalid.");
                 }
 
-                // 2. Update State with new Data
                 applyOptimisticUpdates(posts);
 
                 let combinedPosts = [...posts];
@@ -1720,38 +1702,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.freshDataLoaded = true;
                 const messagesNavBtn = document.getElementById('messages-btn');
                 if (messagesNavBtn) { messagesNavBtn.style.opacity = '1'; messagesNavBtn.style.pointerEvents = 'auto'; messagesNavBtn.title = ''; }
-
-                // 3. Render UI Normally
+            } catch (e) {
+                console.error("Feed refresh error:", e);
+                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed: ${e.message}</p>`;
+                if (e.message.includes("validate user session")) setTimeout(() => core.logout(), 2000);
+            } finally {
                 if (state.currentView === 'feed') {
                     const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
                     ui.renderFeed(state.posts, activeFeedEl, true);
                     const inactiveFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('following-feed') : document.getElementById('foryou-feed');
                     inactiveFeedEl.innerHTML = '';
-                } else if (['profile', 'hashtagFeed', 'messages', 'settings', 'search', 'createPost', 'postDetail'].includes(state.currentView)) {
-                    ui.render();
-                }
-
-                // 4. AFTER RENDER: Check for Ban/Outage and Redirect if needed (Trap Logic)
-                if (currentUserData) {
-                    if (currentUserData.isSuspended === 'OUTAGE') { 
-                        core.logout(false); 
-                        core.navigateTo('outage'); 
-                        return; 
-                    }
-                    if (currentUserData.banDetails) { 
-                        setTimeout(() => {
-                            ui.renderBanPage(currentUserData.banDetails); 
-                            core.navigateTo('suspended'); 
-                        }, 500); // Small delay to allow UI to "settle" first
-                        return; 
-                    }
-                }
-
-            } catch (e) {
-                console.error("Feed refresh error:", e);
-                // NO LOGOUT HERE - Just show error on feed
-                if (state.currentView === 'feed') document.getElementById('foryou-feed').innerHTML = `<p class="error-message">Could not load feed. Checking connection...</p>`;
-            } 
+                } else if (['profile', 'hashtagFeed', 'messages', 'settings', 'search', 'createPost', 'postDetail'].includes(state.currentView)) ui.render();
+            }
         },
         updateNotificationDot() { document.getElementById('notification-dot').style.display = state.unreadNotificationCount > 0 ? 'block' : 'none'; },
         updateMessageDot() { const hasUnread = state.conversations.some(c => c.unreadCount > 0); document.getElementById('message-dot').style.display = hasUnread ? 'block' : 'none'; },
@@ -1888,17 +1850,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl);
             core.navigateTo('feed'); 
             ui.showFeedSkeleton(document.getElementById('foryou-feed')); 
-            // --- FIX: NEVER LOG OUT ON INIT ERROR, JUST WARN ---
-            try { await core.refreshFeed(false); } catch (error) { console.error("Offline/Error during init:", error); } 
+            try { await core.refreshFeed(false); } catch (error) { alert(`Session error: ${error.message}. Please log in again.`); core.logout(); } 
         },
         main() { core.setupEventListeners(); const savedTheme = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', savedTheme); document.getElementById('theme-switch').checked = savedTheme === 'dark'; if (localStorage.getItem('currentUser')) { core.initializeApp(); } else { core.navigateTo('auth'); } }
     };
 
     const formatTimestamp = (post) => {
         const timestampStr = post.timestamp;
-        if (!timestampStr || (typeof timestampStr === 'string' && timestampStr.trim() === '')) return '';
+        if (!timestampStr) return '';
+        
+        // Safety check for empty or invalid timestamps
+        if (typeof timestampStr === 'string' && timestampStr.trim() === '') return '';
+        
         const date = new Date(timestampStr);
-        if (isNaN(date.getTime())) return ''; 
+        if (isNaN(date.getTime())) return ''; // Fix for "Invalid Date"
+
         const now = new Date();
         const secondsAgo = Math.round((now - date) / 1000);
         if (secondsAgo < 60) return 'just now';
@@ -1910,6 +1876,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (daysAgo <= 14) return `${daysAgo}d ago`;
         return date.toLocaleDateString('en-us', { month: 'short', day: 'numeric' });
     };
-    const sanitizeHTML = (str) => { if (!str) return ''; const temp = document.createElement('div'); temp.textContent = str || ''; return temp.innerHTML; };
+    const sanitizeHTML = (str) => { if (!str) return ''; const temp = document.createElement('div'); temp.textContent = str; return temp.innerHTML; };
     core.main();
 });
