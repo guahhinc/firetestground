@@ -55,24 +55,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (lines.length === 0) return [];
 
             const headers = lines[0].split('\t').map(h => h.trim());
-            
-            // TSV Validation: Check if headers exist
             if (headers.length === 0 || headers.every(h => !h)) {
                 logger.error('TSV Parser', 'Validation failed: No valid headers found');
                 return [];
             }
 
             const data = [];
-
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split('\t');
-                
-                // TSV Validation: Malformed data detection
                 if (values.length > headers.length * 2) {
-                    logger.warn('TSV Parser', `Row ${i} has excessive columns, skipping potentially malformed data.`);
                     continue;
                 }
-
                 const row = {};
                 headers.forEach((header, index) => {
                     row[header] = values[index] || '';
@@ -84,43 +77,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async fetchSheet(sheetKey, retryCount = 0) {
             const sheet = TSV_SHEETS[sheetKey];
-            if (!sheet) {
-                logger.error('TSV Fetch', `Unknown sheet key: ${sheetKey}`);
-                throw new Error(`Unknown sheet: ${sheetKey}`);
-            }
+            if (!sheet) throw new Error(`Unknown sheet: ${sheetKey}`);
 
             try {
                 const response = await fetch(sheet.url + '&cachebust=' + Date.now());
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const text = await response.text();
-                
                 if (!text || text.trim() === '') throw new Error('Empty response body');
-
                 const parsed = this.parse(text);
-                
                 if (parsed === null || parsed === undefined) throw new Error('Parser returned null/undefined');
-
                 return parsed;
             } catch (error) {
                 if (retryCount < 2) {
-                    logger.warn('TSV Fetch', `Retrying ${sheetKey} (Attempt ${retryCount + 1})...`, { error: error.message });
                     await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
                     return this.fetchSheet(sheetKey, retryCount + 1);
                 }
-                logger.error('TSV Fetch', `Failed to fetch ${sheetKey} after retries`, error);
+                logger.error('TSV Fetch', `Failed to fetch ${sheetKey}`, error);
                 throw new Error(`Failed to fetch ${sheetKey}: ${error.message}`);
             }
-        },
-
-        async fetchAllSheets() {
-            const sheetKeys = Object.keys(TSV_SHEETS);
-            const results = await Promise.all(sheetKeys.map(key => this.fetchSheet(key)));
-
-            const data = {};
-            sheetKeys.forEach((key, index) => {
-                data[key] = results[index];
-            });
-            return data;
         }
     };
 
@@ -143,11 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 ]);
                 const messages = [];
                 const currentUserId = userId;
-
                 const userMap = {};
-                accounts.forEach(row => {
-                    userMap[row['userID']] = row;
-                });
+                accounts.forEach(row => userMap[row['userID']] = row);
 
                 messagesData.forEach(row => {
                     const msgId = row['messageID'] || row['messageId'];
@@ -157,33 +128,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const timestamp = row['timestamp'];
                     const isRead = row['isRead'];
 
-                    let isMatch = false;
                     if ((senderId === currentUserId && recipientId === otherUserId) || (senderId === otherUserId && recipientId === currentUserId)) {
-                        isMatch = true;
-                    }
-
-                    if (isMatch) {
                         let decodedMessage = '';
-                        try {
-                            decodedMessage = atob(encodedContent);
-                        } catch (e) {
-                            decodedMessage = 'Could not decode message.';
-                        }
-
+                        try { decodedMessage = atob(encodedContent); } catch (e) { decodedMessage = 'Could not decode message.'; }
                         messages.push({
-                            messageId: msgId,
-                            senderId: senderId,
-                            senderName: userMap[senderId]?.displayName || 'Unknown',
-                            messageContent: decodedMessage,
-                            timestamp: timestamp,
-                            isRead: isRead,
-                            status: 'sent'
+                            messageId: msgId, senderId: senderId, senderName: userMap[senderId]?.displayName || 'Unknown',
+                            messageContent: decodedMessage, timestamp: timestamp, isRead: isRead, status: 'sent'
                         });
                     }
                 });
-
                 messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
                 return { messages };
             } catch (error) {
                 logger.error('Data Aggregator', 'Error in getConversationHistory', error);
@@ -197,17 +151,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     servInfo, bans, blocks, accounts, postsData,
                     comments, likes, followers, messages, groupLastRead, photoLibrary
                 ] = await Promise.all([
-                    tsvParser.fetchSheet('servInfo'),
-                    tsvParser.fetchSheet('bans'),
-                    tsvParser.fetchSheet('blocks'),
-                    tsvParser.fetchSheet('accounts'),
-                    tsvParser.fetchSheet('posts'),
-                    tsvParser.fetchSheet('comments'),
-                    tsvParser.fetchSheet('likes'),
-                    tsvParser.fetchSheet('followers'),
-                    tsvParser.fetchSheet('messages'),
-                    tsvParser.fetchSheet('groupLastRead'),
-                    tsvParser.fetchSheet('photoLibrary')
+                    tsvParser.fetchSheet('servInfo'), tsvParser.fetchSheet('bans'), tsvParser.fetchSheet('blocks'),
+                    tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('posts'), tsvParser.fetchSheet('comments'),
+                    tsvParser.fetchSheet('likes'), tsvParser.fetchSheet('followers'), tsvParser.fetchSheet('messages'),
+                    tsvParser.fetchSheet('groupLastRead'), tsvParser.fetchSheet('photoLibrary')
                 ]);
 
                 let isOutage = false;
@@ -217,14 +164,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (servInfo && servInfo.length > 0) {
                     const servInfoRow = servInfo[0];
                     bannerText = servInfoRow['bannerText'] || '';
-                    const serverStatus = servInfoRow['serverStatus'] || '';
-                    if (String(serverStatus).toLowerCase() === 'outage') isOutage = true;
+                    if (String(servInfoRow['serverStatus']).toLowerCase() === 'outage') isOutage = true;
                 }
 
                 const currentUserRow = accounts.find(row => row['userID'] === currentUserId);
                 if (currentUserRow) {
-                    const isAdmin = String(currentUserRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
-                    isCurrentUserOutageExempt = isAdmin;
+                    isCurrentUserOutageExempt = String(currentUserRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
                 }
 
                 if (isOutage && !isCurrentUserOutageExempt) {
@@ -234,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
-                // ... Maps construction
                 const banMap = {};
                 const now = new Date();
                 bans.forEach(row => {
@@ -295,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const rawPrivacy = getColumn(row, 'profileType', 'privacy') || 'public';
                     const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
                     const isAdmin = String(row['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE';
-                    
                     let totalLikes = 0;
                     (postsByUserMap[uID] || []).forEach(pid => { totalLikes += (likesByPostMap[pid] || []).length; });
 
@@ -320,7 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const authorId = row['userID'];
                     
                     if (currentUserBlockedSet.has(authorId) || (blockMap[authorId] && blockMap[authorId].has(currentUserId))) return;
-                    
                     const author = userMap[authorId];
                     if (!author || author.banDetails) return; 
 
@@ -350,20 +292,80 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
+                // --- DUPLICATE & PENDING POST MERGE FIX ---
+                // We verify if local pending posts are now present in the fetched feedItems (server data)
+                // matching by content and approximate time, since ID changes from temp_ to real UUID/RowID.
+                let pendingPostsToKeep = [];
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const pendingNow = Date.now();
-                    state.localPendingPosts = state.localPendingPosts.filter(p => (pendingNow - new Date(p.timestamp).getTime()) < 120000);
-                    state.localPendingPosts.forEach(lp => { if(!feedItems[lp.postId]) feedItems[lp.postId] = lp; });
+                    const validPending = state.localPendingPosts.filter(p => (pendingNow - new Date(p.timestamp).getTime()) < 300000); // 5 min TTL
+                    
+                    const feedValues = Object.values(feedItems);
+                    
+                    validPending.forEach(lp => {
+                        // Check if this pending post exists in fetched data (De-duplication)
+                        // Heuristic: Same Author AND Same Content AND Time diff < 5 mins
+                        const existsOnServer = feedValues.some(serverPost => 
+                            serverPost.authorId === lp.userId && 
+                            serverPost.postContent === lp.postContent &&
+                            Math.abs(new Date(serverPost.timestamp).getTime() - new Date(lp.timestamp).getTime()) < 300000
+                        );
+
+                        if (!existsOnServer) {
+                            pendingPostsToKeep.push(lp);
+                            // Add to feed if not there
+                            if(!feedItems[lp.postId]) {
+                                feedItems[lp.postId] = {
+                                    postId: lp.postId, authorId: lp.userId, postContent: lp.postContent,
+                                    timestamp: lp.timestamp, isStory: lp.isStory, sortTimestamp: lp.timestamp
+                                };
+                            }
+                        }
+                    });
+                    
+                    // Update state and storage with cleaned list
+                    if (state.localPendingPosts.length !== pendingPostsToKeep.length) {
+                        state.localPendingPosts = pendingPostsToKeep;
+                        persistence.save();
+                    }
                 }
 
                 const posts = Object.values(feedItems).map(item => {
                     const author = userMap[item.authorId];
-                    const pComments = (commentsByPostMap[item.postId] || [])
+                    let pComments = (commentsByPostMap[item.postId] || [])
                         .filter(c => !currentUserBlockedSet.has(c.userId) && !(blockMap[c.userId] && blockMap[c.userId].has(currentUserId)))
                         .map(c => ({ ...c, ...(userMap[c.userId] || {}) }));
+                    
+                    // Merge Pending Comments
+                    const pendingForPost = state.pendingComments.filter(pc => pc.postId === item.postId);
+                    if (pendingForPost.length > 0) {
+                        // Simple dedupe for comments: check content + user
+                        const uniquePending = pendingForPost.filter(pc => 
+                            !pComments.some(serverC => serverC.userId === pc.userId && serverC.commentText === pc.commentText)
+                        );
+                        // If all pending were found on server, we should clean up state (done in next step roughly), 
+                        // here we just concat for display
+                        pComments = [...pComments, ...uniquePending.map(pc => ({
+                            ...pc, ...(userMap[pc.userId] || {}), isVerified: userMap[pc.userId]?.isVerified || 'FALSE'
+                        }))];
+                    }
+
                     const pLikes = likesByPostMap[item.postId] || [];
                     return { ...author, ...item, comments: pComments, likes: pLikes };
                 });
+
+                // Cleanup Pending Comments Global Logic (if server has them now)
+                if (state.pendingComments.length > 0) {
+                    const commentsAllFlat = Object.values(commentsByPostMap).flat();
+                    const newPendingComments = state.pendingComments.filter(pc => {
+                        const exists = commentsAllFlat.some(sc => sc.userId === pc.userId && sc.commentText === pc.commentText && sc.postId === pc.postId);
+                        return !exists && (Date.now() - new Date(pc.timestamp).getTime() < 300000); // 5 min TTL
+                    });
+                    if (newPendingComments.length !== state.pendingComments.length) {
+                        state.pendingComments = newPendingComments;
+                        persistence.save();
+                    }
+                }
 
                 const conversationsMap = {};
                 messages.forEach(row => {
@@ -384,18 +386,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (convoId && otherUser) {
                         let decoded = '';
                         try { decoded = atob(row['messageContent']); } catch { decoded = 'Error decoding.'; }
-                        
                         if (!conversationsMap[convoId]) {
                             conversationsMap[convoId] = { otherUser, lastMessage: '', timestamp: '', unreadCount: 0, messages: [] };
                         }
-                        
                         const c = conversationsMap[convoId];
                         const ts = row['timestamp'];
                         c.messages.push({ 
                             messageId: row['messageID'], senderId: sid, messageContent: decoded, timestamp: ts, 
                             isRead: row['isRead'], status: 'sent', senderName: userMap[sid]?.displayName 
                         });
-
                         if (new Date(ts) > new Date(c.timestamp || 0)) {
                             c.lastMessage = sid === currentUserId ? `You: ${decoded}` : decoded;
                             c.timestamp = ts;
@@ -432,19 +431,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const [blocks, accounts, posts] = await Promise.all([
                     tsvParser.fetchSheet('blocks'), tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('posts')
                 ]);
-                
                 const blockMap = {};
                 blocks.forEach(r => {
                     const bid = r['Blocker ID']; const blid = r['Blocked ID'];
                     if(!blockMap[bid]) blockMap[bid] = new Set();
                     blockMap[bid].add(blid);
                 });
-
                 const userMap = {};
                 accounts.forEach(r => userMap[r['userID']] = { displayName: r['displayName'], profilePictureUrl: r['profilePictureUrl'] });
                 const postAuthorMap = {};
                 posts.forEach(r => postAuthorMap[r['postID']] = r['userID']);
-
                 const currentUserBlockedSet = blockMap[currentUserId] || new Set();
 
                 const notifications = notifData
@@ -474,14 +470,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lowerQ = query.toLowerCase();
                 const users = []; const posts = [];
                 const privacyMap = {};
-
                 accounts.forEach(r => {
                     privacyMap[r['userID']] = getColumn(r, 'profileType') === 'private';
                     if ((r['displayName']||'').toLowerCase().includes(lowerQ) || (r['username']||'').toLowerCase().includes(lowerQ)) {
                         users.push({ userId: r['userID'], displayName: r['displayName'], username: r['username'], profilePictureUrl: r['profilePictureUrl'], isVerified: r['isVerified']});
                     }
                 });
-
                 postsData.forEach(r => {
                     if (privacyMap[r['userID']]) return;
                     if ((r['postContent']||'').toLowerCase().includes(lowerQ)) {
@@ -492,88 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { logger.error('Search', 'Failed', e); throw e; }
         },
         async getUserProfile(params) {
-            try {
-                const uid = params.userId;
-                const cid = params.currentUserId;
-
-                // Fetch necessary sheets
-                const [accounts, followers, postsData, likes, bans] = await Promise.all([
-                    tsvParser.fetchSheet('accounts'),
-                    tsvParser.fetchSheet('followers'),
-                    tsvParser.fetchSheet('posts'),
-                    tsvParser.fetchSheet('likes'),
-                    tsvParser.fetchSheet('bans')
-                ]);
-
-                // Find target user
-                const uRow = accounts.find(r => r['userID'] === uid);
-                if (!uRow) throw new Error("User not found");
-
-                // Calculate stats
-                // Followers: rows where followingID == uid
-                const followerIds = followers.filter(r => (r['followingID'] || r['followingId']) === uid).map(r => r['followerID'] || r['followerId']);
-                // Following: rows where followerID == uid
-                const followingIds = followers.filter(r => (r['followerID'] || r['followerId']) === uid).map(r => (r['followingID'] || r['followingId']));
-
-                // Total Likes calculation
-                const userPostIds = postsData.filter(r => r['userID'] === uid).map(r => r['postID']);
-                let totalLikes = 0;
-                likes.forEach(r => {
-                    if (userPostIds.includes(r['postID'])) totalLikes++;
-                });
-
-                // Check Bans
-                const now = new Date();
-                let banDetails = null;
-                const banRow = bans.find(r => r['username'] === uRow['username']);
-                if (banRow) {
-                    if (!banRow['endDate']) banDetails = { reason: banRow['reason'], endDate: 'permanent' };
-                    else {
-                        const endDate = new Date(banRow['endDate']);
-                        if (!isNaN(endDate.getTime()) && endDate > now) banDetails = { reason: banRow['reason'], endDate: endDate.toISOString() };
-                    }
-                }
-
-                // Determine Relationship
-                let relationship = 'None';
-                if (uid === cid) {
-                    relationship = 'Self';
-                } else {
-                    const iFollowThem = followerIds.includes(String(cid)); 
-                    const theyFollowMe = followingIds.includes(String(cid)); 
-
-                    if (iFollowThem && theyFollowMe) relationship = 'Friends';
-                    else if (iFollowThem) relationship = 'Following';
-                    else if (theyFollowMe) relationship = 'Follows You';
-                }
-
-                // Privacy
-                const rawPrivacy = getColumn(uRow, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
-                const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
-
-                return {
-                    user: {
-                        userId: uid,
-                        username: uRow['username'],
-                        displayName: uRow['displayName'],
-                        profilePictureUrl: uRow['profilePictureUrl'] || '',
-                        description: uRow['description'] || '',
-                        isVerified: uRow['isVerified'] || 'FALSE',
-                        postVisibility: uRow['firePostVisibility'] || 'Everyone',
-                        profilePrivacy: profilePrivacy,
-                        followers: followerIds.length,
-                        following: followingIds.length,
-                        totalLikes: totalLikes,
-                        isAdmin: String(uRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE',
-                        banDetails: banDetails,
-                        relationship: relationship
-                    }
-                };
-
-            } catch (error) {
-                logger.error('Data Aggregator', 'getUserProfile failed', error);
-                throw error;
-            }
+            return await this.getPosts(params);
         }
     };
 
@@ -602,13 +515,30 @@ document.addEventListener('DOMContentLoaded', () => {
         deletedPostIds: new Set(),
         deletedCommentIds: new Set(),
         photoLibrary: [],
-        localPendingPosts: [],
-        pendingOverrides: { likes: {}, follows: {} },
+        
+        // Persistent States Loaded from Storage
+        localPendingPosts: JSON.parse(localStorage.getItem('kangaroo_pendingPosts') || '[]'),
+        pendingComments: JSON.parse(localStorage.getItem('kangaroo_pendingComments') || '[]'),
+        pendingOverrides: {
+            likes: JSON.parse(localStorage.getItem('kangaroo_pendingLikes') || '{}'),
+            follows: JSON.parse(localStorage.getItem('kangaroo_pendingFollows') || '{}')
+        },
+        
         pendingCommentImages: {},
         pendingCommentDrafts: {}
     };
     
     window.kangarooState = state;
+
+    // Persistence Helper
+    const persistence = {
+        save() {
+            localStorage.setItem('kangaroo_pendingPosts', JSON.stringify(state.localPendingPosts));
+            localStorage.setItem('kangaroo_pendingComments', JSON.stringify(state.pendingComments));
+            localStorage.setItem('kangaroo_pendingLikes', JSON.stringify(state.pendingOverrides.likes));
+            localStorage.setItem('kangaroo_pendingFollows', JSON.stringify(state.pendingOverrides.follows));
+        }
+    };
 
     const views = {
         auth: document.getElementById('auth-view'), feed: document.getElementById('main-app-view'),
@@ -638,29 +568,61 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Date.now();
         const OVERRIDE_TIMEOUT = 120000; 
 
+        // Cleanup expired overrides
+        let changed = false;
         for (const postId in state.pendingOverrides.likes) {
-            if (now - state.pendingOverrides.likes[postId].timestamp > OVERRIDE_TIMEOUT) delete state.pendingOverrides.likes[postId];
+            if (now - state.pendingOverrides.likes[postId].timestamp > OVERRIDE_TIMEOUT) {
+                delete state.pendingOverrides.likes[postId];
+                changed = true;
+            }
         }
         for (const userId in state.pendingOverrides.follows) {
-            if (now - state.pendingOverrides.follows[userId].timestamp > OVERRIDE_TIMEOUT) delete state.pendingOverrides.follows[userId];
+            if (now - state.pendingOverrides.follows[userId].timestamp > OVERRIDE_TIMEOUT) {
+                delete state.pendingOverrides.follows[userId];
+                changed = true;
+            }
         }
+        if (changed) persistence.save();
 
         posts.forEach(post => {
+            // Apply Pending Likes
             const likeOverride = state.pendingOverrides.likes[post.postId];
             if (likeOverride) {
                 const hasLike = post.likes.some(l => l.userId === state.currentUser.userId);
-                if (likeOverride.status === true && !hasLike) post.likes.push({ userId: state.currentUser.userId });
-                else if (likeOverride.status === false && hasLike) post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
+                // Consistency check: If server already has the state we want, remove override
+                if (likeOverride.status === true && hasLike) {
+                    delete state.pendingOverrides.likes[post.postId];
+                    persistence.save();
+                } else if (likeOverride.status === false && !hasLike) {
+                    delete state.pendingOverrides.likes[post.postId];
+                    persistence.save();
+                } else {
+                    // Force the state
+                    if (likeOverride.status === true) post.likes.push({ userId: state.currentUser.userId });
+                    else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
+                }
             }
         });
 
         const followOverrides = state.pendingOverrides.follows;
+        // Apply Pending Follows
         for (const userId in followOverrides) {
             const override = followOverrides[userId];
-            if (override.status === true) {
-                if (!state.currentUserFollowingList.includes(userId)) state.currentUserFollowingList.push(userId);
+            const isFollowing = state.currentUserFollowingList.includes(userId);
+            
+            // Consistency Check
+            if (override.status === true && isFollowing) {
+                delete state.pendingOverrides.follows[userId];
+                persistence.save();
+            } else if (override.status === false && !isFollowing) {
+                delete state.pendingOverrides.follows[userId];
+                persistence.save();
             } else {
-                state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== userId);
+                if (override.status === true) {
+                    if (!state.currentUserFollowingList.includes(userId)) state.currentUserFollowingList.push(userId);
+                } else {
+                    state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== userId);
+                }
             }
         }
         
@@ -680,17 +642,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const api = {
         queue: [],
         isProcessingQueue: false,
-        pendingCalls: new Map(), // Tracks pending debounced calls
-        lastCallTime: new Map(), // Tracks when each action was last called
+        pendingCalls: new Map(), 
+        lastCallTime: new Map(), 
 
         debounce(key, delay = 300) {
-            // Infrastructure for rate limiting, can be implemented per specific key
             const last = this.lastCallTime.get(key) || 0;
             const now = Date.now();
-            if (now - last < delay) {
-                logger.info('Debounce', `Throttled call for ${key}`);
-                return false; 
-            }
+            if (now - last < delay) return false; 
             this.lastCallTime.set(key, now);
             return true;
         },
@@ -742,16 +700,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async callAppsScript(action, body, method, retryCount = 0) {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+            const timeoutId = setTimeout(() => controller.abort(), 30000); 
             
             try {
                 let url = SCRIPT_URL;
-                const options = { 
-                    method, 
-                    mode: 'cors', 
-                    redirect: 'follow',
-                    signal: controller.signal 
-                };
+                const options = { method, mode: 'cors', redirect: 'follow', signal: controller.signal };
 
                 if (method === 'GET') {
                     const params = new URLSearchParams({ action, ...body });
@@ -761,7 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const response = await fetch(url, options);
-                clearTimeout(timeoutId); // Clear timeout on success
+                clearTimeout(timeoutId);
 
                 if (!response.ok) throw new Error(`Network error: ${response.status}`);
                 const result = await response.json();
@@ -769,23 +722,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (result.status === 'error') {
                     const error = new Error(result.message);
                     if (result.banDetails) error.banDetails = result.banDetails;
-                    if (result.user) error.user = result.user; // Attach user info even on error if provided
+                    if (result.user) error.user = result.user;
                     throw error;
                 }
                 logger.success('API', `Action ${action} completed`);
                 return result;
             } catch (error) {
-                // Apps Script Retry After Fail Logic
-                if (retryCount < 2 && (
-                    error.name === 'AbortError' || 
-                    (error.message && error.message.includes('HTTP 5')) || 
-                    (error.message && error.message.toLowerCase().includes('network')) ||
-                    (error.message && error.message.toLowerCase().includes('failed to fetch'))
-                )) {
+                if (retryCount < 2 && (error.name === 'AbortError' || (error.message && error.message.includes('HTTP 5')) || (error.message && error.message.toLowerCase().includes('network')))) {
                     logger.warn('API Retry', `Retrying ${action} (Attempt ${retryCount + 1})...`);
-                    await new Promise(resolve => 
-                        setTimeout(resolve, 1000 * Math.pow(2, retryCount)) // Exponential backoff
-                    );
+                    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
                     return this.callAppsScript(action, body, method, retryCount + 1);
                 }
                 throw error; 
@@ -806,13 +751,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isForYou = state.currentFeedType === 'foryou';
                 const activeFeedEl = document.getElementById(isForYou ? 'foryou-feed' : 'following-feed');
                 const inactiveFeedEl = document.getElementById(isForYou ? 'following-feed' : 'foryou-feed');
-                
-                // Explicitly clear inactive to avoid duplicates/confusion, render active
                 this.renderFeed(state.posts, activeFeedEl, true);
                 inactiveFeedEl.innerHTML = '';
-                
                 document.getElementById('feed-container').style.transform = isForYou ? 'translateX(0)' : 'translateX(-50%)';
-                
                 document.querySelectorAll('.feed-nav-tab').forEach(t => t.classList.remove('active'));
                 document.querySelector(`.feed-nav-tab[data-feed-type="${state.currentFeedType}"]`).classList.add('active');
             }
@@ -1005,18 +946,15 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         formatPostContent(content) {
             if (!content) return '';
-            // Regex to wrap URLs in anchor tags, protecting src/href attributes
-            // AND format hashtags
             return content
                 .replace(/(href="|src=")?(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)/g, (match, prefix, url) => {
-                    if (prefix) return match; // Already inside an attribute
+                    if (prefix) return match; 
                     return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
                 })
                 .replace(/(^|\s)#(\w+)/g, '$1<a href="#" class="hashtag-link" data-hashtag="$2">#$2</a>');
         },
         formatCommentContent(content) {
             if (!content) return '';
-            // Same logic for comments
             return content
                 .replace(/(href="|src=")?(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)/g, (match, prefix, url) => {
                     if (prefix) return match;
@@ -1399,6 +1337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         displayName: state.currentUser.displayName, username: state.currentUser.username, profilePictureUrl: state.currentUser.profilePictureUrl, isVerified: state.currentUser.isVerified
                     };
                     state.localPendingPosts.unshift(newPost);
+                    persistence.save(); // Save Pending State
                     state.posts.unshift(newPost);
                     api.call('createPost', { userId: state.currentUser.userId, postContent, isStory: false, storyDuration: 0 }); 
                 } 
@@ -1426,9 +1365,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const tempComment = { 
                 commentId: `temp_${Date.now()}`, userId: state.currentUser.userId, displayName: state.currentUser.displayName, isVerified: state.currentUser.isVerified, profilePictureUrl: state.currentUser.profilePictureUrl, commentText: finalCommentText, timestamp: new Date().toISOString()
             }; 
+            
+            // Add to State
             const postIndex = state.posts.findIndex(p => p.postId === postId); 
             if (postIndex > -1) { 
                 state.posts[postIndex].comments.push(tempComment); 
+                // Add to Pending
+                state.pendingComments.push({ postId: postId, userId: state.currentUser.userId, commentText: finalCommentText, timestamp: tempComment.timestamp });
+                persistence.save();
+
                 delete state.pendingCommentImages[postId];
                 delete state.pendingCommentDrafts[postId]; 
                 ui.render(); 
@@ -1443,12 +1388,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const post = state.posts.find(p => p.postId === postId); if (!post) return;
             const isLiked = post.likes.some(l => l.userId === state.currentUser.userId);
             const newStatus = !isLiked;
+            
+            // Persistence
             state.pendingOverrides.likes[postId] = { status: newStatus, timestamp: Date.now() };
+            persistence.save();
+
             if (newStatus) post.likes.push({ userId: state.currentUser.userId });
             else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
             ui.render();
             try { await api.call('toggleLike', { postId, userId: state.currentUser.userId }); } catch (e) {
                 delete state.pendingOverrides.likes[postId];
+                persistence.save();
                 if (!newStatus) post.likes.push({ userId: state.currentUser.userId });
                 else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
                 ui.render(); alert(`Error: ${e.message}`);
@@ -1462,7 +1412,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const postToDeleteIndex = state.posts.findIndex(p => p.postId === postId); 
             if (postToDeleteIndex !== -1) state.posts.splice(postToDeleteIndex, 1);
             const pendingIndex = state.localPendingPosts.findIndex(p => p.postId === postId);
-            if (pendingIndex !== -1) state.localPendingPosts.splice(pendingIndex, 1);
+            if (pendingIndex !== -1) { state.localPendingPosts.splice(pendingIndex, 1); persistence.save(); }
             ui.render(); 
             try { await api.call('deletePost', { postId, userId: state.currentUser.userId }); } catch (e) { 
                 alert(`Error: Could not delete post. ${e.message}`); 
@@ -1490,6 +1440,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const isFollowing = state.currentUserFollowingList.includes(followingId);
             const newStatus = !isFollowing;
             state.pendingOverrides.follows[followingId] = { status: newStatus, timestamp: Date.now() };
+            persistence.save();
+
             if (newStatus) state.currentUserFollowingList.push(followingId);
             else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
             if (state.profileUser && state.profileUser.userId === followingId) {
@@ -1502,6 +1454,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             try { const result = await api.call('toggleFollow', { followerId: state.currentUser.userId, followingId }); if(state.profileUser && state.profileUser.userId === followingId) { state.profileUser.relationship = result.newRelationship; ui.renderProfilePage(); } } catch (e) {
                 delete state.pendingOverrides.follows[followingId];
+                persistence.save();
                 if (!newStatus) state.currentUserFollowingList.push(followingId); else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
                 alert(`Error: ${e.message}`); ui.renderProfilePage();
             }
@@ -1658,6 +1611,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
+                // Fetch directly from data aggregator (API/TSV) instead of just local state update
                 const { messages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
                 state.currentConversation.messages = messages.map(m => ({ ...m, status: 'sent' }));
                 ui.renderConversationHistory();
@@ -1682,6 +1636,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.renderConversationHistory();
             try {
                 await api.call('sendMessage', { senderId: state.currentUser.userId, recipientId, messageContent, isGroup: false });
+                // No poll needed immediately, optimistic update is sufficient, will poll in 1s or 3s cycle
                 setTimeout(() => handlers.pollNewMessages(recipientId), 1000);
             } catch (e) {
                 const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === tempId);
@@ -1709,6 +1664,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const { messages: remoteMessages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
                 const newMessagesFormatted = remoteMessages.map(m => ({ ...m, status: 'sent' }));
                 
+                // Merge logic: avoid overwriting "sending" messages if they exist locally but not remotely yet
+                // However, usually we just replace the whole list or append
+                // To keep it simple: Replace known-good history, append pending
                 const pendingMessages = state.currentConversation.messages.filter(m => m.status === 'sending' || m.status === 'failed');
                 state.currentConversation.messages = [...newMessagesFormatted, ...pendingMessages];
                 ui.renderConversationHistory();
@@ -1760,10 +1718,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 applyOptimisticUpdates(posts);
 
                 let combinedPosts = [...posts];
+                // Local Pending Posts merge handled inside getPosts now for de-duplication safety
+                // We re-check here just in case getPosts logic missed purely new local items if feed fetch failed partially
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
-                    const now = Date.now();
-                    state.localPendingPosts = state.localPendingPosts.filter(p => (now - new Date(p.timestamp).getTime()) < 120000);
-                    combinedPosts = [...state.localPendingPosts, ...combinedPosts];
+                    const postIdsInFeed = new Set(posts.map(p => p.postId));
+                    const missingPending = state.localPendingPosts.filter(lp => !postIdsInFeed.has(lp.postId));
+                    combinedPosts = [...missingPending, ...combinedPosts];
                 }
 
                 state.posts = combinedPosts;
@@ -1802,6 +1762,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMessageDot() { const hasUnread = state.conversations.some(c => c.unreadCount > 0); document.getElementById('message-dot').style.display = hasUnread ? 'block' : 'none'; },
         logout(forceReload = true) { localStorage.removeItem('currentUser'); state.currentUser = null; if (state.backgroundRefreshIntervalId) clearInterval(state.backgroundRefreshIntervalId); if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); if (forceReload) window.location.reload(); },
         setupEventListeners() {
+            // ... existing listeners ...
             let searchTimeout;
             document.getElementById('show-register-link').addEventListener('click', () => { document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
             document.getElementById('show-login-link').addEventListener('click', () => { document.getElementById('register-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); });
@@ -1862,6 +1823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.querySelectorAll('.feed-nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
                     const container = document.getElementById('feed-container');
                     
+                    // Specific Logic for Tab Switch
                     const activeFeedEl = document.getElementById(feedType === 'foryou' ? 'foryou-feed' : 'following-feed');
                     const inactiveFeedEl = document.getElementById(feedType === 'foryou' ? 'following-feed' : 'foryou-feed');
                     
@@ -1947,13 +1909,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const deltaX = touchEndX - touchStartX;
                 const deltaY = Math.abs(touchEndY - touchStartY);
 
+                // Swipe right check: Start near left edge (< 50px), horizontal movement, logic distance (> 100px)
                 if (touchStartX < 50 && deltaX > 100 && deltaY < 50) {
                     const backBtn = document.querySelector('.view.active .back-btn');
                     const msgBackBtn = document.getElementById('back-to-convos-btn');
                     
-                    if (backBtn && backBtn.offsetParent !== null) { 
+                    // If in post detail, profile, or custom views with back button
+                    if (backBtn && backBtn.offsetParent !== null) { // offsetParent null means hidden
                         backBtn.click();
                     } 
+                    // If in message conversation view on mobile
                     else if (state.currentView === 'messages' && msgBackBtn && getComputedStyle(msgBackBtn).display !== 'none') {
                         msgBackBtn.click();
                     }
