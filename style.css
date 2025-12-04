@@ -198,11 +198,16 @@ button:focus-visible,
     font-size: 24px;
 }
 
-#auth-view,
-#suspended-view,
-#outage-view {
+#auth-view {
     padding-top: 10vh;
     text-align: center;
+}
+
+#suspended-view,
+#outage-view {
+    padding-top: calc(10vh + var(--banner-height));
+    text-align: center;
+    transition: padding-top 0.3s ease-in-out;
 }
 
 #auth-view .logo {
