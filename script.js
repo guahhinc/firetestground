@@ -912,12 +912,17 @@ document.addEventListener('DOMContentLoaded', () => {
             views[state.currentView]?.classList.add('active');
 
             if (state.currentView === 'feed') {
-                this.renderFeed(state.posts, document.getElementById('foryou-feed'), true);
-                document.getElementById('following-feed').innerHTML = '';
-                document.getElementById('feed-container').style.transform = 'translateX(0)';
-                document.querySelector('.feed-nav-tab[data-feed-type="foryou"]').classList.add('active');
-                document.querySelector('.feed-nav-tab[data-feed-type="following"]').classList.remove('active');
-                state.currentFeedType = 'foryou';
+                const isForYou = state.currentFeedType === 'foryou';
+                const activeFeedEl = document.getElementById(isForYou ? 'foryou-feed' : 'following-feed');
+                const inactiveFeedEl = document.getElementById(isForYou ? 'following-feed' : 'foryou-feed');
+                
+                this.renderFeed(state.posts, activeFeedEl, true);
+                inactiveFeedEl.innerHTML = '';
+                
+                document.getElementById('feed-container').style.transform = isForYou ? 'translateX(0)' : 'translateX(-50%)';
+                
+                document.querySelectorAll('.feed-nav-tab').forEach(t => t.classList.remove('active'));
+                document.querySelector(`.feed-nav-tab[data-feed-type="${state.currentFeedType}"]`).classList.add('active');
             }
             if (state.currentView === 'profile') this.renderProfilePage();
             if (state.currentView === 'editProfile') this.renderEditProfilePage();
@@ -1714,7 +1719,13 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async updatePostVisibility(e) { const newVisibility = e.target.value; const selectElement = e.target; selectElement.disabled = true; try { await api.call('updatePostVisibility', { userId: state.currentUser.userId, visibility: newVisibility }); state.currentUser.postVisibility = newVisibility; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); } catch (err) { alert('Could not update setting: ' + err.message); selectElement.value = state.currentUser.postVisibility; } finally { selectElement.disabled = false; } },
         async updateProfilePrivacy(e) { const newPrivacy = e.target.checked ? 'private' : 'public'; const switchElement = e.target; switchElement.disabled = true; try { await api.call('updateProfilePrivacy', { userId: state.currentUser.userId, privacy: newPrivacy }); state.currentUser.profilePrivacy = newPrivacy; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); } catch (err) { alert('Could not update setting: ' + err.message); switchElement.checked = state.currentUser.profilePrivacy === 'private'; } finally { switchElement.disabled = false; } },
-        async loadMessagesView() { core.navigateTo('messages'); ui.renderMessagesPage(); },
+        
+        async loadMessagesView() { 
+            core.navigateTo('messages'); 
+            ui.renderMessagesPage(); 
+            await core.refreshFeed(false); 
+        },
+        
         async loadConversation(otherUserId) {
             if (state.isConversationLoading) return;
             if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId);
@@ -1880,10 +1891,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.message.includes("validate user session")) setTimeout(() => core.logout(), 2000);
             } finally {
                 if (state.currentView === 'feed') {
-                    const activeFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('foryou-feed') : document.getElementById('following-feed');
+                    // Logic to render active tab without resetting state
+                    const isForYou = state.currentFeedType === 'foryou';
+                    const activeFeedEl = document.getElementById(isForYou ? 'foryou-feed' : 'following-feed');
+                    const inactiveFeedEl = document.getElementById(isForYou ? 'following-feed' : 'foryou-feed');
+                    
                     ui.renderFeed(state.posts, activeFeedEl, true);
-                    const inactiveFeedEl = state.currentFeedType === 'foryou' ? document.getElementById('following-feed') : document.getElementById('foryou-feed');
-                    inactiveFeedEl.innerHTML = '';
+                    inactiveFeedEl.innerHTML = ''; // Ensure other feed is empty
                 } else if (['profile', 'hashtagFeed', 'messages', 'settings', 'search', 'createPost', 'postDetail'].includes(state.currentView)) ui.render();
             }
         },
