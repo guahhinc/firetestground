@@ -293,8 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 // --- DUPLICATE & PENDING POST MERGE FIX ---
-                // We verify if local pending posts are now present in the fetched feedItems (server data)
-                // matching by content and approximate time, since ID changes from temp_ to real UUID/RowID.
                 let pendingPostsToKeep = [];
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const pendingNow = Date.now();
@@ -303,8 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const feedValues = Object.values(feedItems);
                     
                     validPending.forEach(lp => {
-                        // Check if this pending post exists in fetched data (De-duplication)
-                        // Heuristic: Same Author AND Same Content AND Time diff < 5 mins
                         const existsOnServer = feedValues.some(serverPost => 
                             serverPost.authorId === lp.userId && 
                             serverPost.postContent === lp.postContent &&
@@ -313,7 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!existsOnServer) {
                             pendingPostsToKeep.push(lp);
-                            // Add to feed if not there
                             if(!feedItems[lp.postId]) {
                                 feedItems[lp.postId] = {
                                     postId: lp.postId, authorId: lp.userId, postContent: lp.postContent,
@@ -323,7 +318,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                     
-                    // Update state and storage with cleaned list
                     if (state.localPendingPosts.length !== pendingPostsToKeep.length) {
                         state.localPendingPosts = pendingPostsToKeep;
                         persistence.save();
@@ -336,15 +330,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         .filter(c => !currentUserBlockedSet.has(c.userId) && !(blockMap[c.userId] && blockMap[c.userId].has(currentUserId)))
                         .map(c => ({ ...c, ...(userMap[c.userId] || {}) }));
                     
-                    // Merge Pending Comments
                     const pendingForPost = state.pendingComments.filter(pc => pc.postId === item.postId);
                     if (pendingForPost.length > 0) {
-                        // Simple dedupe for comments: check content + user
                         const uniquePending = pendingForPost.filter(pc => 
                             !pComments.some(serverC => serverC.userId === pc.userId && serverC.commentText === pc.commentText)
                         );
-                        // If all pending were found on server, we should clean up state (done in next step roughly), 
-                        // here we just concat for display
                         pComments = [...pComments, ...uniquePending.map(pc => ({
                             ...pc, ...(userMap[pc.userId] || {}), isVerified: userMap[pc.userId]?.isVerified || 'FALSE'
                         }))];
@@ -354,12 +344,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return { ...author, ...item, comments: pComments, likes: pLikes };
                 });
 
-                // Cleanup Pending Comments Global Logic (if server has them now)
                 if (state.pendingComments.length > 0) {
                     const commentsAllFlat = Object.values(commentsByPostMap).flat();
                     const newPendingComments = state.pendingComments.filter(pc => {
                         const exists = commentsAllFlat.some(sc => sc.userId === pc.userId && sc.commentText === pc.commentText && sc.postId === pc.postId);
-                        return !exists && (Date.now() - new Date(pc.timestamp).getTime() < 300000); // 5 min TTL
+                        return !exists && (Date.now() - new Date(pc.timestamp).getTime() < 300000); 
                     });
                     if (newPendingComments.length !== state.pendingComments.length) {
                         state.pendingComments = newPendingComments;
@@ -745,6 +734,12 @@ document.addEventListener('DOMContentLoaded', () => {
             header.classList.toggle('hidden', !isUserLoggedIn);
             document.body.classList.toggle('logged-in', isUserLoggedIn);
             Object.values(views).forEach(v => v.classList.remove('active'));
+            // Remove lingering transforms from swipe
+            Object.values(views).forEach(v => {
+                v.style.transform = '';
+                v.style.transition = '';
+                v.style.boxShadow = '';
+            });
             views[state.currentView]?.classList.add('active');
 
             if (state.currentView === 'feed') {
@@ -1908,31 +1903,90 @@ document.addEventListener('DOMContentLoaded', () => {
             // SWIPE BACK GESTURE
             let touchStartX = 0;
             let touchStartY = 0;
+            let isSwipingBack = false;
+            let activeViewEl = null;
+
             document.addEventListener('touchstart', (e) => {
-                touchStartX = e.changedTouches[0].screenX;
-                touchStartY = e.changedTouches[0].screenY;
-            }, {passive: true});
+                const excludedViews = ['feed', 'auth', 'outage', 'suspended'];
+                
+                // Special check for messages view: only allow swipe if in chat mode
+                if (state.currentView === 'messages') {
+                    const msgContainer = document.querySelector('.messages-container');
+                    if (!msgContainer || !msgContainer.classList.contains('show-chat-view')) return;
+                } else if (excludedViews.includes(state.currentView)) {
+                    return;
+                }
 
-            document.addEventListener('touchend', (e) => {
-                const touchEndX = e.changedTouches[0].screenX;
-                const touchEndY = e.changedTouches[0].screenY;
-                const deltaX = touchEndX - touchStartX;
-                const deltaY = Math.abs(touchEndY - touchStartY);
-
-                // Swipe right check: Start near left edge (< 50px), horizontal movement, logic distance (> 100px)
-                if (touchStartX < 50 && deltaX > 100 && deltaY < 50) {
-                    const backBtn = document.querySelector('.view.active .back-btn');
-                    const msgBackBtn = document.getElementById('back-to-convos-btn');
-                    
-                    // If in post detail, profile, or custom views with back button
-                    if (backBtn && backBtn.offsetParent !== null) { // offsetParent null means hidden
-                        backBtn.click();
-                    } 
-                    // If in message conversation view on mobile
-                    else if (state.currentView === 'messages' && msgBackBtn && getComputedStyle(msgBackBtn).display !== 'none') {
-                        msgBackBtn.click();
+                // Only start swipe from left edge
+                if (e.touches[0].clientX < 40) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    activeViewEl = document.querySelector('.view.active');
+                    isSwipingBack = true;
+                    if(activeViewEl) {
+                        activeViewEl.style.transition = 'none';
                     }
                 }
+            }, {passive: true});
+
+            document.addEventListener('touchmove', (e) => {
+                if (!isSwipingBack || !activeViewEl) return;
+
+                const touchCurrentX = e.touches[0].clientX;
+                const deltaX = touchCurrentX - touchStartX;
+
+                // Lock vertical scroll if swiping horizontally
+                if (Math.abs(e.touches[0].clientY - touchStartY) > deltaX) return;
+
+                if (deltaX > 0) {
+                    e.preventDefault(); // Stop scrolling
+                    // Move the view with the finger
+                    activeViewEl.style.transform = `translateX(${deltaX}px)`;
+                    activeViewEl.style.boxShadow = `-5px 0 15px rgba(0,0,0,0.1)`; 
+                }
+            }, {passive: false});
+
+            document.addEventListener('touchend', (e) => {
+                if (!isSwipingBack || !activeViewEl) return;
+                
+                const touchEndX = e.changedTouches[0].clientX;
+                const deltaX = touchEndX - touchStartX;
+                
+                activeViewEl.style.transition = 'transform 0.3s ease-out';
+
+                // Threshold to trigger back (e.g., 100px)
+                if (deltaX > 100) {
+                    // Slide off screen to the right
+                    activeViewEl.style.transform = `translateX(100vw)`;
+                    
+                    setTimeout(() => {
+                        const backBtn = document.querySelector('.view.active .back-btn');
+                        const msgBackBtn = document.getElementById('back-to-convos-btn');
+                        
+                        if (backBtn && backBtn.offsetParent !== null) backBtn.click();
+                        else if (state.currentView === 'messages' && msgBackBtn) msgBackBtn.click();
+                        else if (state.previousView) core.navigateTo(state.previousView);
+                        
+                        // Reset after navigation
+                        setTimeout(() => {
+                            if(activeViewEl) {
+                                activeViewEl.style.transform = '';
+                                activeViewEl.style.boxShadow = '';
+                                activeViewEl.style.transition = '';
+                            }
+                        }, 50);
+                    }, 300); // Wait for animation
+                } else {
+                    // Snap back to original position
+                    activeViewEl.style.transform = `translateX(0)`;
+                    setTimeout(() => {
+                        activeViewEl.style.transition = '';
+                        activeViewEl.style.boxShadow = '';
+                    }, 300);
+                }
+
+                isSwipingBack = false;
+                activeViewEl = null;
             }, {passive: true});
         },
         async initializeApp() { 
