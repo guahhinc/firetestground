@@ -80,7 +80,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!sheet) throw new Error(`Unknown sheet: ${sheetKey}`);
 
             try {
-                const response = await fetch(sheet.url + '&cachebust=' + Date.now());
+                // FIXED: Added Cache-Control headers to ensure feed is always fresh
+                const response = await fetch(sheet.url + '&cachebust=' + Date.now(), {
+                    cache: "no-store",
+                    headers: {
+                        'Pragma': 'no-cache',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate'
+                    }
+                });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const text = await response.text();
                 if (!text || text.trim() === '') throw new Error('Empty response body');
@@ -128,12 +135,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     const timestamp = row['timestamp'];
                     const isRead = row['isRead'];
 
-                    if ((senderId === currentUserId && recipientId === otherUserId) || (senderId === otherUserId && recipientId === currentUserId)) {
+                    // FIXED: Strict checking for conversation partners
+                    if ((String(senderId) === String(currentUserId) && String(recipientId) === String(otherUserId)) || 
+                        (String(senderId) === String(otherUserId) && String(recipientId) === String(currentUserId))) {
+                        
                         let decodedMessage = '';
                         try { decodedMessage = atob(encodedContent); } catch (e) { decodedMessage = 'Could not decode message.'; }
                         messages.push({
-                            messageId: msgId, senderId: senderId, senderName: userMap[senderId]?.displayName || 'Unknown',
-                            messageContent: decodedMessage, timestamp: timestamp, isRead: isRead, status: 'sent'
+                            messageId: msgId, 
+                            senderId: senderId, 
+                            senderName: userMap[senderId]?.displayName || 'Unknown',
+                            messageContent: decodedMessage, 
+                            timestamp: timestamp, 
+                            isRead: isRead, 
+                            status: 'sent'
                         });
                     }
                 });
@@ -141,7 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return { messages };
             } catch (error) {
                 logger.error('Data Aggregator', 'Error in getConversationHistory', error);
-                throw error;
+                // Return empty instead of crashing to allow UI to show "New Conversation"
+                return { messages: [] };
             }
         },
         async getPosts(params) {
@@ -293,10 +309,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 // --- DUPLICATE & PENDING POST MERGE FIX ---
+                // FIXED: Increased timeout to 15 minutes because Google Sheets is slow to publish
+                const PENDING_TTL = 900000; // 15 minutes
                 let pendingPostsToKeep = [];
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const pendingNow = Date.now();
-                    const validPending = state.localPendingPosts.filter(p => (pendingNow - new Date(p.timestamp).getTime()) < 300000); // 5 min TTL
+                    const validPending = state.localPendingPosts.filter(p => (pendingNow - new Date(p.timestamp).getTime()) < PENDING_TTL);
                     
                     const feedValues = Object.values(feedItems);
                     
@@ -304,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const existsOnServer = feedValues.some(serverPost => 
                             serverPost.authorId === lp.userId && 
                             serverPost.postContent === lp.postContent &&
-                            Math.abs(new Date(serverPost.timestamp).getTime() - new Date(lp.timestamp).getTime()) < 300000
+                            Math.abs(new Date(serverPost.timestamp).getTime() - new Date(lp.timestamp).getTime()) < PENDING_TTL
                         );
 
                         if (!existsOnServer) {
@@ -555,7 +573,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const applyOptimisticUpdates = (posts) => {
         const now = Date.now();
-        const OVERRIDE_TIMEOUT = 120000; 
+        // FIXED: Increased timeout to 10 minutes (600000ms) because Google Sheets takes a long time to publish updates
+        const OVERRIDE_TIMEOUT = 600000; 
 
         // Cleanup expired overrides
         let changed = false;
@@ -1678,7 +1697,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 api.call('markConversationAsRead', { userId: state.currentUser.userId, otherUserId });
             } catch (e) { logger.warn("Polling", "Poll failed", e.message); }
         },
-        async startConversationFromProfile(otherUserId) { core.navigateTo('messages'); const existingConvo = state.conversations.find(c => c.otherUser.userId === otherUserId); if (!existingConvo && state.profileUser && state.profileUser.userId === otherUserId) { const newConvo = { otherUser: { userId: state.profileUser.userId, displayName: state.profileUser.displayName, profilePictureUrl: state.profileUser.profilePictureUrl, isVerified: state.profileUser.isVerified }, lastMessage: '', timestamp: new Date().toISOString(), unreadCount: 0 }; state.conversations.unshift(newConvo); } await handlers.loadConversation(otherUserId, false); }
+        async startConversationFromProfile(otherUserId) {
+            core.navigateTo('messages');
+            
+            // Check if we already have a conversation locally
+            let existingConvo = state.conversations.find(c => c.otherUser.userId === otherUserId);
+            
+            // If not, and we have profile data, create a "ghost" conversation so the UI works immediately
+            if (!existingConvo && state.profileUser && state.profileUser.userId === otherUserId) {
+                const newConvo = { 
+                    otherUser: { 
+                        userId: state.profileUser.userId, 
+                        displayName: state.profileUser.displayName, 
+                        profilePictureUrl: state.profileUser.profilePictureUrl, 
+                        isVerified: state.profileUser.isVerified 
+                    }, 
+                    lastMessage: '', 
+                    timestamp: new Date().toISOString(), 
+                    unreadCount: 0 
+                };
+                // Prepend to list so it shows at top
+                state.conversations.unshift(newConvo);
+                ui.renderConversationsList();
+            } else if (!existingConvo) {
+                // Fallback if we don't have the user data handy (rare in this flow)
+                // We'll let loadConversation try to handle it or it will just be blank until message sent
+                console.warn("Starting conversation without pre-loaded profile data");
+            }
+
+            await handlers.loadConversation(otherUserId, false);
+        }
     };
 
     const core = {
