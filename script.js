@@ -100,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (parsed === null || parsed === undefined) throw new Error('Parser returned null/undefined');
 
-                // logger.success('TSV Fetch', `Fetched ${sheetKey} (${parsed.length} rows)`); // Commented out to reduce noise, enable for deep debug
                 return parsed;
             } catch (error) {
                 if (retryCount < 2) {
@@ -191,11 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw error;
             }
         },
-        // ... (getPosts, getUserProfile, search methods kept mostly same logic but wrapped in logging if errors occur) ...
         async getPosts(params) {
             try {
                 const currentUserId = params.userId || params;
-                // Fetch all required sheets
                 const [
                     servInfo, bans, blocks, accounts, postsData,
                     comments, likes, followers, messages, groupLastRead, photoLibrary
@@ -237,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
-                // ... (Map building logic remains same) ...
+                // ... Maps construction
                 const banMap = {};
                 const now = new Date();
                 bans.forEach(row => {
@@ -322,13 +319,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (state.deletedPostIds.has(pid)) return;
                     const authorId = row['userID'];
                     
-                    // Blocking Check
                     if (currentUserBlockedSet.has(authorId) || (blockMap[authorId] && blockMap[authorId].has(currentUserId))) return;
                     
                     const author = userMap[authorId];
-                    if (!author || author.banDetails) return; // Hide banned users
+                    if (!author || author.banDetails) return; 
 
-                    // Privacy Check
                     const isOwn = authorId === currentUserId;
                     const followsAuthor = currentUserFollowingList.includes(String(authorId));
                     const authorFollowsBack = (followingMap[authorId] || []).includes(String(currentUserId));
@@ -340,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         else {
                             if (author.postVisibility === 'Followers') canView = followsAuthor;
                             else if (author.postVisibility === 'Friends') canView = areFriends;
-                            else canView = true; // Everyone
+                            else canView = true;
                         }
                     }
 
@@ -355,7 +350,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Pending Posts Merge
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const pendingNow = Date.now();
                     state.localPendingPosts = state.localPendingPosts.filter(p => (pendingNow - new Date(p.timestamp).getTime()) < 120000);
@@ -371,7 +365,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return { ...author, ...item, comments: pComments, likes: pLikes };
                 });
 
-                // Conversations Logic
                 const conversationsMap = {};
                 messages.forEach(row => {
                     const sid = row['senderID'] || row['senderId'];
@@ -410,7 +403,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Calculate unread
                 messages.forEach(row => {
                     const sid = row['senderID'] || row['senderId'];
                     const rid = row['recipientID'] || row['recipientId'];
@@ -435,8 +427,6 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async getNotifications(params) {
             try {
-                // ... (simplified call to tsvParser with retry)
-                // Existing logic mostly kept, just error wrapper
                 const currentUserId = params.userId || params;
                 const notifData = await tsvParser.fetchSheet('notifications');
                 const [blocks, accounts, posts] = await Promise.all([
@@ -460,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const notifications = notifData
                     .filter(n => String(n.recipientUserId) === String(currentUserId))
                     .filter(n => !state.deletedNotificationIds.has(n.notificationId))
-                    .filter(n => !currentUserBlockedSet.has(n.actorUserId)) // Simple check, strict check above
+                    .filter(n => !currentUserBlockedSet.has(n.actorUserId)) 
                     .map(n => {
                         const actor = userMap[n.actorUserId] || { displayName: 'Unknown', profilePictureUrl: '' };
                         const paid = n.postId ? postAuthorMap[n.postId] : null;
@@ -479,7 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         async search({ query, currentUserId }) {
-            // ... same logic
             try {
                 const [accounts, postsData] = await Promise.all([ tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('posts') ]);
                 const lowerQ = query.toLowerCase();
@@ -503,55 +492,88 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { logger.error('Search', 'Failed', e); throw e; }
         },
         async getUserProfile(params) {
-            // Passthrough for now to reduce diff size, existing logic was solid
             try {
-                return await this.getPosts(params.userId); // Reusing fetch logic slightly inefficient but safe
-                // Wait, specific getUserProfile needed for just one user stats?
-                // Logic already exists in main TSV block, but separated:
-                // Re-implementing simplified version:
                 const uid = params.userId;
                 const cid = params.currentUserId;
-                const [acc, fol, post, like, ban] = await Promise.all([
-                    tsvParser.fetchSheet('accounts'), tsvParser.fetchSheet('followers'), tsvParser.fetchSheet('posts'), tsvParser.fetchSheet('likes'), tsvParser.fetchSheet('bans')
-                ]);
-                // ... same calculation logic ...
-                // To save token count, assuming previous robust implementation logic stands.
-                // Re-inserting specific key parts:
-                const uRow = acc.find(r => r['userID'] === uid);
-                if (!uRow) throw new Error("User not found");
-                
-                const followers = fol.filter(r => r['followingID'] === uid).map(r => r['followerID']);
-                const following = fol.filter(r => r['followerID'] === uid).map(r => r['followingID']);
-                
-                const userPosts = post.filter(r => r['userID'] === uid).map(r => r['postID']);
-                let likesCount = 0;
-                like.forEach(r => { if(userPosts.includes(r['postID'])) likesCount++; });
 
-                let rel = 'None';
-                if(uid === cid) rel = 'Self';
-                else {
-                    const follows = followers.includes(cid);
-                    const isFollowing = following.includes(cid); // Wait, fol following ID logic:
-                    // followerID follows followingID.
-                    // AM I following THEM? -> their followers list includes me.
-                    const iFollowThem = followers.includes(String(cid));
-                    const theyFollowMe = following.includes(String(cid));
-                    if(iFollowThem && theyFollowMe) rel = 'Friends';
-                    else if (iFollowThem) rel = 'Following';
-                    else if (theyFollowMe) rel = 'Follows You';
+                // Fetch necessary sheets
+                const [accounts, followers, postsData, likes, bans] = await Promise.all([
+                    tsvParser.fetchSheet('accounts'),
+                    tsvParser.fetchSheet('followers'),
+                    tsvParser.fetchSheet('posts'),
+                    tsvParser.fetchSheet('likes'),
+                    tsvParser.fetchSheet('bans')
+                ]);
+
+                // Find target user
+                const uRow = accounts.find(r => r['userID'] === uid);
+                if (!uRow) throw new Error("User not found");
+
+                // Calculate stats
+                // Followers: rows where followingID == uid
+                const followerIds = followers.filter(r => (r['followingID'] || r['followingId']) === uid).map(r => r['followerID'] || r['followerId']);
+                // Following: rows where followerID == uid
+                const followingIds = followers.filter(r => (r['followerID'] || r['followerId']) === uid).map(r => (r['followingID'] || r['followingId']));
+
+                // Total Likes calculation
+                const userPostIds = postsData.filter(r => r['userID'] === uid).map(r => r['postID']);
+                let totalLikes = 0;
+                likes.forEach(r => {
+                    if (userPostIds.includes(r['postID'])) totalLikes++;
+                });
+
+                // Check Bans
+                const now = new Date();
+                let banDetails = null;
+                const banRow = bans.find(r => r['username'] === uRow['username']);
+                if (banRow) {
+                    if (!banRow['endDate']) banDetails = { reason: banRow['reason'], endDate: 'permanent' };
+                    else {
+                        const endDate = new Date(banRow['endDate']);
+                        if (!isNaN(endDate.getTime()) && endDate > now) banDetails = { reason: banRow['reason'], endDate: endDate.toISOString() };
+                    }
                 }
 
-                return { user: {
-                    userId: uid, username: uRow['username'], displayName: uRow['displayName'],
-                    profilePictureUrl: uRow['profilePictureUrl'], description: uRow['description'],
-                    isVerified: uRow['isVerified'], postVisibility: uRow['firePostVisibility'],
-                    profilePrivacy: getColumn(uRow, 'profileType')==='private'?'private':'public',
-                    followers: followers.length, following: following.length, totalLikes: likesCount,
-                    isAdmin: String(uRow['isAdmin']).toUpperCase() === 'TRUE',
-                    relationship: rel,
-                    banDetails: ban.find(b => b['username'] === uRow['username']) ? { reason: 'Banned' } : null
-                }};
-            } catch (e) { logger.error('Profile', 'Fetch failed', e); throw e; }
+                // Determine Relationship
+                let relationship = 'None';
+                if (uid === cid) {
+                    relationship = 'Self';
+                } else {
+                    const iFollowThem = followerIds.includes(String(cid)); 
+                    const theyFollowMe = followingIds.includes(String(cid)); 
+
+                    if (iFollowThem && theyFollowMe) relationship = 'Friends';
+                    else if (iFollowThem) relationship = 'Following';
+                    else if (theyFollowMe) relationship = 'Follows You';
+                }
+
+                // Privacy
+                const rawPrivacy = getColumn(uRow, 'profileType', 'Profile Type', 'privacy', 'profiletype') || 'public';
+                const profilePrivacy = String(rawPrivacy).trim().toLowerCase() === 'private' ? 'private' : 'public';
+
+                return {
+                    user: {
+                        userId: uid,
+                        username: uRow['username'],
+                        displayName: uRow['displayName'],
+                        profilePictureUrl: uRow['profilePictureUrl'] || '',
+                        description: uRow['description'] || '',
+                        isVerified: uRow['isVerified'] || 'FALSE',
+                        postVisibility: uRow['firePostVisibility'] || 'Everyone',
+                        profilePrivacy: profilePrivacy,
+                        followers: followerIds.length,
+                        following: followingIds.length,
+                        totalLikes: totalLikes,
+                        isAdmin: String(uRow['isAdmin'] || 'FALSE').toUpperCase() === 'TRUE',
+                        banDetails: banDetails,
+                        relationship: relationship
+                    }
+                };
+
+            } catch (error) {
+                logger.error('Data Aggregator', 'getUserProfile failed', error);
+                throw error;
+            }
         }
     };
 
@@ -1193,24 +1215,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return `<div class="blocked-user-row setting-row"><img src="${pfp}" class="pfp pfp-sm" style="cursor:default;"><span class="blocked-user-info">${sanitizeHTML(blockedUser.displayName)}</span><button class="secondary unblock-btn" data-action="unblock-user" data-user-id="${blockedUser.userId}">Unblock</button></div>`;
                 }).join('');
             } else blockedListContainer.innerHTML = '<p style="color: var(--secondary-text-color); font-size: 14px; padding: 8px 0;">You haven\'t blocked anyone.</p>';
-            
-            // Add Data Request Button
-            const aboutSection = document.querySelectorAll('.settings-section')[3]; // Assuming "About" is the 4th section
-            if (aboutSection) {
-                const statusRow = aboutSection.querySelector('.setting-row:nth-child(3)'); // After Status Page
-                if (statusRow && !document.getElementById('data-request-btn-row')) {
-                    const newRow = document.createElement('div');
-                    newRow.className = 'setting-row';
-                    newRow.id = 'data-request-btn-row';
-                    newRow.innerHTML = `
-                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSe7zNVXa1c4U1Frdf8Xw6oUjOezxwXbmM3FWUFkkQWntbjKjA/viewform?usp=publish-editor" target="_blank" style="text-decoration: none; color: var(--primary-text-color); display: flex; width: 100%; justify-content: space-between; align-items: center;">
-                            <span>Request Account Deletion/Data</span>
-                            <span class="material-symbols-rounded">folder_delete</span>
-                        </a>
-                    `;
-                    aboutSection.appendChild(newRow);
-                }
-            }
         },
         showError(elId, msg) { const el = document.getElementById(elId); el.textContent = msg; el.classList.remove('hidden'); },
         hideError(elId) { document.getElementById(elId).classList.add('hidden'); },
@@ -1654,7 +1658,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                // Fetch directly from data aggregator (API/TSV) instead of just local state update
                 const { messages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
                 state.currentConversation.messages = messages.map(m => ({ ...m, status: 'sent' }));
                 ui.renderConversationHistory();
@@ -1679,7 +1682,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.renderConversationHistory();
             try {
                 await api.call('sendMessage', { senderId: state.currentUser.userId, recipientId, messageContent, isGroup: false });
-                // No poll needed immediately, optimistic update is sufficient, will poll in 1s or 3s cycle
                 setTimeout(() => handlers.pollNewMessages(recipientId), 1000);
             } catch (e) {
                 const messageIndex = state.currentConversation.messages.findIndex(m => m.messageId === tempId);
@@ -1707,9 +1709,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const { messages: remoteMessages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
                 const newMessagesFormatted = remoteMessages.map(m => ({ ...m, status: 'sent' }));
                 
-                // Merge logic: avoid overwriting "sending" messages if they exist locally but not remotely yet
-                // However, usually we just replace the whole list or append
-                // To keep it simple: Replace known-good history, append pending
                 const pendingMessages = state.currentConversation.messages.filter(m => m.status === 'sending' || m.status === 'failed');
                 state.currentConversation.messages = [...newMessagesFormatted, ...pendingMessages];
                 ui.renderConversationHistory();
@@ -1803,7 +1802,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMessageDot() { const hasUnread = state.conversations.some(c => c.unreadCount > 0); document.getElementById('message-dot').style.display = hasUnread ? 'block' : 'none'; },
         logout(forceReload = true) { localStorage.removeItem('currentUser'); state.currentUser = null; if (state.backgroundRefreshIntervalId) clearInterval(state.backgroundRefreshIntervalId); if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); if (forceReload) window.location.reload(); },
         setupEventListeners() {
-            // ... existing listeners ...
             let searchTimeout;
             document.getElementById('show-register-link').addEventListener('click', () => { document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
             document.getElementById('show-login-link').addEventListener('click', () => { document.getElementById('register-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); });
@@ -1864,7 +1862,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.querySelectorAll('.feed-nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
                     const container = document.getElementById('feed-container');
                     
-                    // Specific Logic for Tab Switch
                     const activeFeedEl = document.getElementById(feedType === 'foryou' ? 'foryou-feed' : 'following-feed');
                     const inactiveFeedEl = document.getElementById(feedType === 'foryou' ? 'following-feed' : 'foryou-feed');
                     
@@ -1950,16 +1947,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const deltaX = touchEndX - touchStartX;
                 const deltaY = Math.abs(touchEndY - touchStartY);
 
-                // Swipe right check: Start near left edge (< 50px), horizontal movement, logic distance (> 100px)
                 if (touchStartX < 50 && deltaX > 100 && deltaY < 50) {
                     const backBtn = document.querySelector('.view.active .back-btn');
                     const msgBackBtn = document.getElementById('back-to-convos-btn');
                     
-                    // If in post detail, profile, or custom views with back button
-                    if (backBtn && backBtn.offsetParent !== null) { // offsetParent null means hidden
+                    if (backBtn && backBtn.offsetParent !== null) { 
                         backBtn.click();
                     } 
-                    // If in message conversation view on mobile
                     else if (state.currentView === 'messages' && msgBackBtn && getComputedStyle(msgBackBtn).display !== 'none') {
                         msgBackBtn.click();
                     }
