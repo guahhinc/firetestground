@@ -403,11 +403,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
+                // --- FIXED MESSAGE NOTIFICATIONS ---
                 messages.forEach(row => {
                     const sid = row['senderID'] || row['senderId'];
                     const rid = row['recipientID'] || row['recipientId'];
-                    if (sid !== currentUserId && rid === currentUserId && (row['isRead'] === 'FALSE' || row['isRead'] === false)) {
-                        if (conversationsMap[sid]) conversationsMap[sid].unreadCount = (conversationsMap[sid].unreadCount || 0) + 1;
+                    const isReadRaw = String(row['isRead'] || '');
+                    // Robust check: if it's NOT explicitly TRUE (or 'true', 'TRUE'), it is unread.
+                    // This handles 'FALSE', 'false', and empty strings.
+                    const isUnread = isReadRaw.toUpperCase() !== 'TRUE';
+
+                    if (sid !== currentUserId && rid === currentUserId && isUnread) {
+                        if (conversationsMap[sid]) {
+                            conversationsMap[sid].unreadCount = (conversationsMap[sid].unreadCount || 0) + 1;
+                        }
                     }
                 });
 
@@ -444,18 +452,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 posts.forEach(r => postAuthorMap[r['postID']] = r['userID']);
                 const currentUserBlockedSet = blockMap[currentUserId] || new Set();
 
+                // --- FIXED NOTIFICATIONS FILTERING ---
                 const notifications = notifData
-                    .filter(n => String(n.recipientUserId) === String(currentUserId))
-                    .filter(n => !state.deletedNotificationIds.has(n.notificationId))
-                    .filter(n => !currentUserBlockedSet.has(n.actorUserId)) 
+                    .filter(n => {
+                        // Robust ID check using getColumn helper or direct fallback
+                        const rId = getColumn(n, 'recipientUserId', 'recipientID', 'recipientId');
+                        return String(rId) === String(currentUserId);
+                    })
+                    .filter(n => {
+                        // Use consistent ID access
+                        const nId = getColumn(n, 'notificationId', 'notificationID');
+                        return !state.deletedNotificationIds.has(nId);
+                    })
+                    .filter(n => {
+                         const actorId = getColumn(n, 'actorUserId', 'actorID', 'actorId');
+                         return !currentUserBlockedSet.has(actorId);
+                    }) 
                     .map(n => {
-                        const actor = userMap[n.actorUserId] || { displayName: 'Unknown', profilePictureUrl: '' };
-                        const paid = n.postId ? postAuthorMap[n.postId] : null;
+                        const actorId = getColumn(n, 'actorUserId', 'actorID', 'actorId');
+                        const actor = userMap[actorId] || { displayName: 'Unknown', profilePictureUrl: '' };
+                        const postId = getColumn(n, 'postId', 'postID');
+                        const paid = postId ? postAuthorMap[postId] : null;
+                        
                         return {
-                            notificationId: n.notificationId, actorUserId: n.actorUserId,
-                            actorDisplayName: actor.displayName, actorProfilePictureUrl: actor.profilePictureUrl,
-                            actionType: n.actionType, postId: n.postId, postAuthorId: paid,
-                            timestamp: n.timestamp, isRead: n.isRead
+                            notificationId: getColumn(n, 'notificationId', 'notificationID'),
+                            actorUserId: actorId,
+                            actorDisplayName: actor.displayName,
+                            actorProfilePictureUrl: actor.profilePictureUrl,
+                            actionType: getColumn(n, 'actionType', 'type'),
+                            postId: postId,
+                            postAuthorId: paid,
+                            timestamp: getColumn(n, 'timestamp', 'date'),
+                            isRead: getColumn(n, 'isRead', 'read')
                         };
                     }).reverse();
                 
@@ -1821,6 +1849,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let { notifications } = notificationsResult || { notifications: [] };
                 notifications = notifications.filter(n => !state.deletedNotificationIds.has(n.notificationId));
                 state.notifications = notifications;
+                // --- FIXED NOTIFICATION DOT CALCULATION ---
+                // Ensure checking the string "TRUE" is case-insensitive and robust
                 state.unreadNotificationCount = notifications.filter(n => String(n.isRead).toUpperCase() !== 'TRUE').length;
 
                 this.updateNotificationDot();
