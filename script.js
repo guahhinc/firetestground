@@ -29,10 +29,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (lines.length === 0) return [];
 
             const headers = lines[0].split('\t').map(h => h.trim());
+            
+            // TSV Validation: Check if headers exist
+            if (headers.length === 0 || headers.every(h => !h)) {
+                console.error('TSV validation failed: No valid headers found');
+                return [];
+            }
+
             const data = [];
 
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split('\t');
+                
+                // TSV Validation: Malformed data detection
+                if (values.length > headers.length * 2) {
+                    console.warn(`TSV row ${i} has too many columns, skipping`);
+                    continue;
+                }
+
                 const row = {};
                 headers.forEach((header, index) => {
                     row[header] = values[index] || '';
@@ -42,14 +56,37 @@ document.addEventListener('DOMContentLoaded', () => {
             return data;
         },
 
-        async fetchSheet(sheetKey) {
+        async fetchSheet(sheetKey, retryCount = 0) {
             const sheet = TSV_SHEETS[sheetKey];
             if (!sheet) throw new Error(`Unknown sheet: ${sheetKey}`);
 
-            const response = await fetch(sheet.url + '&cachebust=' + Date.now());
-            if (!response.ok) throw new Error(`Failed to fetch ${sheetKey}: ${response.status}`);
-            const text = await response.text();
-            return this.parse(text);
+            try {
+                const response = await fetch(sheet.url + '&cachebust=' + Date.now());
+                if (!response.ok) throw new Error(`Failed to fetch ${sheetKey}: ${response.status}`);
+                const text = await response.text();
+                
+                // Validation: Check for empty response
+                if (!text || text.trim() === '') {
+                    throw new Error('Empty response');
+                }
+
+                const parsed = this.parse(text);
+                
+                // Validation: Check parser result
+                if (parsed === null || parsed === undefined) {
+                    throw new Error('Parser returned invalid data');
+                }
+
+                return parsed;
+            } catch (error) {
+                // Retry Logic: Up to 3 attempts total
+                if (retryCount < 2) {
+                    console.warn(`Retrying fetch for ${sheetKey} (Attempt ${retryCount + 2})...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+                    return this.fetchSheet(sheetKey, retryCount + 1);
+                }
+                throw new Error(`Failed after 3 attempts: ${error.message}`);
+            }
         },
 
         async fetchAllSheets() {
@@ -754,6 +791,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const api = {
         queue: [],
         isProcessingQueue: false,
+        pendingCalls: new Map(), // Tracks pending debounced calls
+        lastCallTime: new Map(), // Tracks when each action was last called
+
+        debounce(key, delay = 300) {
+            // Infrastructure for rate limiting, can be implemented per specific key
+            const last = this.lastCallTime.get(key) || 0;
+            const now = Date.now();
+            if (now - last < delay) {
+                return false; 
+            }
+            this.lastCallTime.set(key, now);
+            return true;
+        },
 
         async enqueue(action, body, method = 'POST') {
             return new Promise((resolve, reject) => {
@@ -799,19 +849,32 @@ document.addEventListener('DOMContentLoaded', () => {
             return await this.enqueue(action, body, method);
         },
 
-        async callAppsScript(action, body, method) {
+        async callAppsScript(action, body, method, retryCount = 0) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+            
             try {
                 let url = SCRIPT_URL;
-                const options = { method, mode: 'cors', redirect: 'follow' };
+                const options = { 
+                    method, 
+                    mode: 'cors', 
+                    redirect: 'follow',
+                    signal: controller.signal 
+                };
+
                 if (method === 'GET') {
                     const params = new URLSearchParams({ action, ...body });
                     url += `?${params.toString()}`;
                 } else {
                     options.body = JSON.stringify({ action, ...body });
                 }
+
                 const response = await fetch(url, options);
+                clearTimeout(timeoutId); // Clear timeout on success
+
                 if (!response.ok) throw new Error(`Network error: ${response.status}`);
                 const result = await response.json();
+                
                 if (result.status === 'error') {
                     const error = new Error(result.message);
                     if (result.banDetails) error.banDetails = result.banDetails;
@@ -819,7 +882,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw error;
                 }
                 return result;
-            } catch (error) { console.error(`API Call failed for action "${action}":`, error); throw error; }
+            } catch (error) {
+                // Apps Script Retry After Fail Logic
+                if (retryCount < 2 && (
+                    error.name === 'AbortError' || 
+                    (error.message && error.message.includes('HTTP 5')) || 
+                    (error.message && error.message.toLowerCase().includes('network')) ||
+                    (error.message && error.message.toLowerCase().includes('failed to fetch'))
+                )) {
+                    console.warn(`Retrying callAppsScript for ${action} (Attempt ${retryCount + 2})...`);
+                    await new Promise(resolve => 
+                        setTimeout(resolve, 1000 * Math.pow(2, retryCount)) // Exponential backoff
+                    );
+                    return this.callAppsScript(action, body, method, retryCount + 1);
+                }
+                console.error(`API Call failed for action "${action}":`, error); 
+                throw error; 
+            }
         }
     };
 
@@ -1941,6 +2020,13 @@ document.addEventListener('DOMContentLoaded', () => {
             state.localBlocklist = new Set(JSON.parse(localStorage.getItem('localBlocklist') || '[]'));
             const navPfp = document.getElementById('nav-pfp');
             if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl);
+            
+            // Check if user is banned on page load
+            if (state.currentUser.banDetails) {
+                ui.renderBanPage(state.currentUser.banDetails);
+                return core.navigateTo('suspended');
+            }
+            
             core.navigateTo('feed'); 
             ui.showFeedSkeleton(document.getElementById('foryou-feed')); 
             try { await core.refreshFeed(false); } catch (error) { alert(`Session error: ${error.message}. Please log in again.`); core.logout(); } 
