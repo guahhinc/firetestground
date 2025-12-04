@@ -815,6 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (result.status === 'error') {
                     const error = new Error(result.message);
                     if (result.banDetails) error.banDetails = result.banDetails;
+                    if (result.user) error.user = result.user; // Attach user info even on error if provided
                     throw error;
                 }
                 return result;
@@ -1344,10 +1345,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 await core.initializeApp(); 
             } catch (e) { 
                 if (e.message === 'ACCOUNT_BANNED') { 
+                    if (e.user) {
+                         // Lock the user in by saving the session, then show ban page
+                         state.currentUser = e.user;
+                         localStorage.setItem('currentUser', JSON.stringify(e.user));
+                    }
                     ui.renderBanPage(e.banDetails); 
                     core.navigateTo('suspended'); 
                 } else if (e.message === 'SERVER_OUTAGE') { 
-                    core.logout(false); 
+                    if (e.user) {
+                        state.currentUser = e.user;
+                        localStorage.setItem('currentUser', JSON.stringify(e.user));
+                    }
                     core.navigateTo('outage'); 
                 } else { 
                     ui.showError('login-error', e.message); 
@@ -1748,7 +1757,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 else { banner.classList.add('hidden'); root.style.setProperty('--banner-height', '0px'); }
 
                 if (currentUserData) {
-                    if (currentUserData.isSuspended === 'OUTAGE') { core.logout(false); return core.navigateTo('outage'); }
+                    if (currentUserData.isSuspended === 'OUTAGE') { 
+                        // Do not logout, just navigate
+                        return core.navigateTo('outage'); 
+                    }
                     if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
                     state.currentUser = currentUserData;
                     state.userProfileCache[currentUserData.userId] = currentUserData;
