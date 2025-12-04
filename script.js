@@ -80,13 +80,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!sheet) throw new Error(`Unknown sheet: ${sheetKey}`);
 
             try {
-                // FIXED: Added Cache-Control headers to ensure feed is always fresh
+                // FORCE FRESH CONTENT
                 const response = await fetch(sheet.url + '&cachebust=' + Date.now(), {
                     cache: "no-store",
-                    headers: {
-                        'Pragma': 'no-cache',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate'
-                    }
+                    headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
                 });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const text = await response.text();
@@ -135,7 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const timestamp = row['timestamp'];
                     const isRead = row['isRead'];
 
-                    // FIXED: Strict checking for conversation partners
                     if ((String(senderId) === String(currentUserId) && String(recipientId) === String(otherUserId)) || 
                         (String(senderId) === String(otherUserId) && String(recipientId) === String(currentUserId))) {
                         
@@ -156,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return { messages };
             } catch (error) {
                 logger.error('Data Aggregator', 'Error in getConversationHistory', error);
-                // Return empty instead of crashing to allow UI to show "New Conversation"
                 return { messages: [] };
             }
         },
@@ -309,8 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 // --- DUPLICATE & PENDING POST MERGE FIX ---
-                // FIXED: Increased timeout to 15 minutes because Google Sheets is slow to publish
-                const PENDING_TTL = 900000; // 15 minutes
+                const PENDING_TTL = 900000; // 15 min
                 let pendingPostsToKeep = [];
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
                     const pendingNow = Date.now();
@@ -573,7 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const applyOptimisticUpdates = (posts) => {
         const now = Date.now();
-        // FIXED: Increased timeout to 10 minutes (600000ms) because Google Sheets takes a long time to publish updates
+        // 10 minutes cache override
         const OVERRIDE_TIMEOUT = 600000; 
 
         // Cleanup expired overrides
@@ -597,7 +591,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const likeOverride = state.pendingOverrides.likes[post.postId];
             if (likeOverride) {
                 const hasLike = post.likes.some(l => l.userId === state.currentUser.userId);
-                // Consistency check: If server already has the state we want, remove override
                 if (likeOverride.status === true && hasLike) {
                     delete state.pendingOverrides.likes[post.postId];
                     persistence.save();
@@ -605,7 +598,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     delete state.pendingOverrides.likes[post.postId];
                     persistence.save();
                 } else {
-                    // Force the state
                     if (likeOverride.status === true) post.likes.push({ userId: state.currentUser.userId });
                     else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
                 }
@@ -618,7 +610,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const override = followOverrides[userId];
             const isFollowing = state.currentUserFollowingList.includes(userId);
             
-            // Consistency Check
             if (override.status === true && isFollowing) {
                 delete state.pendingOverrides.follows[userId];
                 persistence.save();
@@ -1020,9 +1011,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let commentsToRender = [...post.comments].reverse();
             let viewAllBtnHTML = '';
-            if (!isDetailView && commentsToRender.length > 3) {
+            // FIXED: Increased comments from 3 to 4
+            if (!isDetailView && commentsToRender.length > 4) {
                 const totalComments = commentsToRender.length;
-                commentsToRender = commentsToRender.slice(0, 3); 
+                commentsToRender = commentsToRender.slice(0, 4); 
                 viewAllBtnHTML = `<button class="view-all-comments-btn" data-action="view-post" data-post-id="${post.postId}">View all ${totalComments} comments</button>`;
             }
             const isStory = post.isStory === true || String(post.isStory).toUpperCase() === 'TRUE';
@@ -1451,26 +1443,57 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async toggleFollow(followingId) {
             const followBtn = document.getElementById('follow-btn'); if (!followBtn) return; followBtn.disabled = true;
+            
+            // Logic Check
             const isFollowing = state.currentUserFollowingList.includes(followingId);
-            const newStatus = !isFollowing;
+            const newStatus = !isFollowing; // Toggle
+            
+            // 1. Optimistic Update of List
+            if (newStatus) {
+                if(!state.currentUserFollowingList.includes(followingId)) state.currentUserFollowingList.push(followingId);
+            } else {
+                state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
+            }
+
+            // 2. Optimistic Persistence
             state.pendingOverrides.follows[followingId] = { status: newStatus, timestamp: Date.now() };
             persistence.save();
 
-            if (newStatus) state.currentUserFollowingList.push(followingId);
-            else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
+            // 3. Update Profile View Relationship Status Immediately
             if (state.profileUser && state.profileUser.userId === followingId) {
                  const isFollower = state.currentUserFollowersList.includes(followingId);
-                 if(newStatus && isFollower) state.profileUser.relationship = 'Friends';
-                 else if(newStatus) state.profileUser.relationship = 'Following';
-                 else if(isFollower) state.profileUser.relationship = 'Follows You';
+                 if (newStatus && isFollower) state.profileUser.relationship = 'Friends';
+                 else if (newStatus) state.profileUser.relationship = 'Following';
+                 else if (isFollower) state.profileUser.relationship = 'Follows You';
                  else state.profileUser.relationship = 'None';
-                 ui.renderProfilePage();
+                 ui.renderProfilePage(); // Re-render button with new text
             }
-            try { const result = await api.call('toggleFollow', { followerId: state.currentUser.userId, followingId }); if(state.profileUser && state.profileUser.userId === followingId) { state.profileUser.relationship = result.newRelationship; ui.renderProfilePage(); } } catch (e) {
+
+            try { 
+                const result = await api.call('toggleFollow', { followerId: state.currentUser.userId, followingId }); 
+                // Confirm with server response
+                if(state.profileUser && state.profileUser.userId === followingId) { 
+                    state.profileUser.relationship = result.newRelationship; 
+                    ui.renderProfilePage(); 
+                } 
+            } catch (e) {
+                // Revert on Failure
                 delete state.pendingOverrides.follows[followingId];
                 persistence.save();
-                if (!newStatus) state.currentUserFollowingList.push(followingId); else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
-                alert(`Error: ${e.message}`); ui.renderProfilePage();
+                
+                if (!newStatus) state.currentUserFollowingList.push(followingId); 
+                else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
+                
+                // Re-calculate relationship
+                if (state.profileUser && state.profileUser.userId === followingId) {
+                    const isFollower = state.currentUserFollowersList.includes(followingId);
+                    if (!newStatus && isFollower) state.profileUser.relationship = 'Friends'; // Reverted back to true
+                    else if (!newStatus) state.profileUser.relationship = 'Following';
+                    else if (isFollower) state.profileUser.relationship = 'Follows You'; // Reverted back to false
+                    else state.profileUser.relationship = 'None';
+                    ui.renderProfilePage();
+                }
+                alert(`Error: ${e.message}`); 
             }
         },
         async search(query) {
@@ -1506,9 +1529,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (state.currentView === 'profile' && (!state.profileUser || state.profileUser.userId === userId)) {
                     state.profileUser = user;
+                    
+                    // FIXED: Explicitly Calculate Relationship Status for Client-Side rendering immediately
+                    // This ensures button shows correct status even if server didn't explicitly return 'relationship' field
+                    const isFollowing = state.currentUserFollowingList.includes(userId);
+                    const isFollower = state.currentUserFollowersList.includes(userId);
+                    if (isFollowing && isFollower) user.relationship = 'Friends';
+                    else if (isFollowing) user.relationship = 'Following';
+                    else if (isFollower) user.relationship = 'Follows You';
+                    else user.relationship = 'None';
+
+                    // Re-apply any pending overrides
                     if (state.pendingOverrides.follows[userId]) {
                         const override = state.pendingOverrides.follows[userId];
-                        const isFollower = state.currentUserFollowersList.includes(userId);
                         if (override.status && isFollower) user.relationship = 'Friends';
                         else if (override.status) user.relationship = 'Following';
                         else if (isFollower) user.relationship = 'Follows You';
