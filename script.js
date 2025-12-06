@@ -409,13 +409,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // --- FIXED MESSAGE NOTIFICATIONS ---
                 messages.forEach(row => {
                     const sid = getColumn(row, 'senderId', 'senderID');
                     const rid = getColumn(row, 'recipientId', 'recipientID');
                     const isReadRaw = String(getColumn(row, 'isRead') || '');
-                    
-                    // Logic: If 'isRead' is NOT 'TRUE' (case-insensitive), it counts as unread.
                     const isUnread = isReadRaw.toUpperCase() !== 'TRUE';
 
                     if (sid !== currentUserId && rid === currentUserId && isUnread) {
@@ -458,7 +455,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 posts.forEach(r => postAuthorMap[r['postID']] = r['userID']);
                 const currentUserBlockedSet = blockMap[currentUserId] || new Set();
 
-                // --- FIXED NOTIFICATIONS FILTERING (MAPPED TO SHEET HEADERS) ---
                 const notifications = notifData
                     .filter(n => {
                         const rId = getColumn(n, 'recieverId', 'recipientId', 'recipientUserId');
@@ -470,6 +466,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                     .filter(n => {
                          const actorId = getColumn(n, 'senderId', 'actorUserId', 'actorId');
+                         // Prevent self-notifications
+                         if (String(actorId) === String(currentUserId)) return false; 
                          return !currentUserBlockedSet.has(actorId);
                     }) 
                     .map(n => {
@@ -478,7 +476,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         const postId = getColumn(n, 'postId', 'postID');
                         const paid = postId ? postAuthorMap[postId] : null;
                         
-                        // User Sheet Header: 'dismissed' (FALSE = Show, TRUE = Hidden/Read)
                         const dismissedRaw = String(getColumn(n, 'dismissed') || 'FALSE').toUpperCase();
                         const isRead = dismissedRaw === 'TRUE';
 
@@ -1047,7 +1044,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let commentsToRender = [...post.comments].reverse();
             let viewAllBtnHTML = '';
-            // FIXED: Increased comments from 3 to 4
             if (!isDetailView && commentsToRender.length > 4) {
                 const totalComments = commentsToRender.length;
                 commentsToRender = commentsToRender.slice(0, 4); 
@@ -1055,18 +1051,96 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const isStory = post.isStory === true || String(post.isStory).toUpperCase() === 'TRUE';
 
-            postDiv.innerHTML = `
-                <div class="post-header"><img src="${pfpUrl}" class="pfp pfp-sm"><div class="post-header-info"><span class="post-display-name">${sanitizeHTML(post.displayName)} ${String(post.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span><span class="post-timestamp" data-timestamp="${isStory ? post.expiryTimestamp : post.timestamp}" data-is-story="${isStory}">${formatTimestamp(post)}</span></div>${optionsMenuHTML}</div>
-                <div class="post-content"></div>
-                ${showActions ? `<div class="post-actions"><button class="like-btn ${isLiked ? 'liked' : ''}"><span class="material-symbols-rounded">favorite</span></button><span class="like-count">${post.likes.length} likes</span></div>` : ''}
-                ${showComments ? `<div class="comments-section"><div class="comments-list">${commentsToRender.map(c => this.createCommentElement(c)).join('')}${viewAllBtnHTML}</div><div class="comment-form-container">${pendingImageHTML}<form class="comment-form"><input type="text" value="${sanitizeHTML(draftText)}" placeholder="Add a comment..."><button type="button" class="comment-image-btn" title="Add Image" data-action="add-comment-image" data-post-id="${post.postId}"><span class="material-symbols-rounded">add_photo_alternate</span></button><button type="submit" class="comment-submit-btn" title="Post Comment"><span class="material-symbols-rounded">send</span></button></form></div></div>` : ''}`;
+            // --- REDESIGNED POST STRUCTURE (Instagram Style) ---
+            
+            // 1. Determine Content (Image/Video vs Text Only)
+            let mediaContentHTML = '';
+            let captionContentHTML = '';
+            
+            const rawContent = post.postContent || '';
+            const hasImage = rawContent.includes('<img');
+            const hasVideo = rawContent.includes('<video');
+            
+            if (hasImage || hasVideo) {
+                // If it has media, extract media for the "main" area and keep text for caption
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = rawContent;
+                const mediaEl = tempDiv.querySelector('img, video');
+                
+                if (mediaEl) {
+                    mediaContentHTML = mediaEl.outerHTML; // Media goes in main slot
+                    mediaEl.remove();
+                    // Clean up BRs
+                    let textOnly = tempDiv.innerHTML.replace(/<br\s*\/?>/gi, '\n').trim();
+                    captionContentHTML = this.formatPostContent(textOnly);
+                } else {
+                    // Fallback
+                    mediaContentHTML = `<div class="post-content-text-only">${this.formatPostContent(rawContent)}</div>`;
+                }
+            } else {
+                // Text Only Post: Show text in the "media" slot but styled as text
+                mediaContentHTML = `<div class="post-content-text-only">${this.formatPostContent(rawContent)}</div>`;
+            }
 
-            const postContentEl = postDiv.querySelector('.post-content');
-            postContentEl.innerHTML = this.formatPostContent(post.postContent);
-            postContentEl.addEventListener('click', (e) => {
-                if (e.target.tagName === 'A') return;
-                handlers.showPostDetail(post.postId);
-            });
+            const timestampHTML = `<div class="post-timestamp-bottom">${formatTimestamp(post)}</div>`;
+
+            postDiv.innerHTML = `
+                <div class="post-header">
+                    <img src="${pfpUrl}" class="pfp pfp-sm">
+                    <div class="post-header-info">
+                        <span class="post-display-name">${sanitizeHTML(post.displayName)} ${String(post.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>
+                    </div>
+                    ${optionsMenuHTML}
+                </div>
+                
+                <div class="post-media-area">
+                    ${mediaContentHTML}
+                </div>
+
+                ${showActions ? `
+                <div class="post-actions-bar">
+                    <div class="post-actions-left">
+                        <button class="like-btn ${isLiked ? 'liked' : ''}"><span class="material-symbols-rounded">${isLiked ? 'favorite' : 'favorite'}</span></button>
+                        <button class="comment-btn" data-action="view-post" data-post-id="${post.postId}"><span class="material-symbols-rounded">chat_bubble</span></button>
+                        <button class="share-btn"><span class="material-symbols-rounded">send</span></button>
+                    </div>
+                    <div class="post-actions-right">
+                        <button class="save-btn"><span class="material-symbols-rounded">bookmark</span></button>
+                    </div>
+                </div>
+                <div class="post-likes-section">
+                    <span class="like-count">${post.likes.length} likes</span>
+                </div>
+                ` : ''}
+
+                <div class="post-caption-section">
+                    ${captionContentHTML ? `<span class="caption-username">${sanitizeHTML(post.displayName)}</span> <span class="caption-text">${captionContentHTML}</span>` : ''}
+                </div>
+
+                ${showComments ? `
+                <div class="comments-section">
+                    ${viewAllBtnHTML}
+                    <div class="comments-list">${commentsToRender.map(c => this.createCommentElement(c)).join('')}</div>
+                    ${timestampHTML}
+                    <div class="comment-form-container">
+                        ${pendingImageHTML}
+                        <form class="comment-form">
+                            <input type="text" value="${sanitizeHTML(draftText)}" placeholder="Add a comment...">
+                            <button type="button" class="comment-image-btn" title="Add Image" data-action="add-comment-image" data-post-id="${post.postId}"><span class="material-symbols-rounded">add_photo_alternate</span></button>
+                            <button type="submit" class="comment-submit-btn" title="Post Comment">Post</button>
+                        </form>
+                    </div>
+                </div>` : ''}`;
+
+            // Add event listeners for media double click (like)
+            const mediaArea = postDiv.querySelector('.post-media-area');
+            if (mediaArea) {
+                mediaArea.addEventListener('dblclick', () => {
+                    const btn = postDiv.querySelector('.like-btn');
+                    if (btn && !btn.classList.contains('liked')) handlers.toggleLike(post.postId);
+                });
+            }
+
             return postDiv;
         },
         createCommentElement(comment) {
@@ -1295,9 +1369,7 @@ document.addEventListener('DOMContentLoaded', () => {
             core.updateNotificationDot();
             
             // Server sync: Try bulk delete if available, or loop
-            // Since backend is unknown, looping is the safer robust method for existing endpoints
             if (ids.length > 0) {
-                // Try catch block inside loop to prevent one failure stopping others
                 ids.forEach(id => {
                     api.call('deleteNotification', { userId: state.currentUser.userId, notificationId: id })
                        .catch(e => console.error(`Failed to delete notification ${id} on server`, e));
