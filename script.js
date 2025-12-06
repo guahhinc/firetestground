@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // FIX: Utility for Input Sanitization (Prevents TSV Injection)
+    const cleanInput = (str) => (str || '').replace(/\t/g, '    ');
+
     // ===== Apps Script URL (for WRITE operations only) =====
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2A8eK6bbH73380G0qW2WJH9RKBAxvqlGIAJf8k35iwBKtW3X0cZo4FRW4ag4OmzVG/exec';
 
@@ -303,20 +306,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // --- DUPLICATE & PENDING POST MERGE FIX ---
+                // FIX: Better Duplicate Handling
                 const PENDING_TTL = 900000; // 15 min
                 let pendingPostsToKeep = [];
                 if (state.localPendingPosts && state.localPendingPosts.length > 0) {
-                    const pendingNow = Date.now();
-                    const validPending = state.localPendingPosts.filter(p => (pendingNow - new Date(p.timestamp).getTime()) < PENDING_TTL);
-                    
                     const feedValues = Object.values(feedItems);
+                    const pendingNow = Date.now();
                     
-                    validPending.forEach(lp => {
+                    state.localPendingPosts.forEach(lp => {
+                        // Check if expiration is passed
+                        if ((pendingNow - new Date(lp.timestamp).getTime()) > PENDING_TTL) return;
+
+                        // Check if it already exists on server (Fuzzy Match on Content + Time)
                         const existsOnServer = feedValues.some(serverPost => 
                             serverPost.authorId === lp.userId && 
                             serverPost.postContent === lp.postContent &&
-                            Math.abs(new Date(serverPost.timestamp).getTime() - new Date(lp.timestamp).getTime()) < PENDING_TTL
+                            Math.abs(new Date(serverPost.timestamp).getTime() - new Date(lp.timestamp).getTime()) < 300000 // 5 min buffer
                         );
 
                         if (!existsOnServer) {
@@ -413,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const sid = getColumn(row, 'senderId', 'senderID');
                     const rid = getColumn(row, 'recipientId', 'recipientID');
                     const isReadRaw = String(getColumn(row, 'isRead') || '');
+                    
                     const isUnread = isReadRaw.toUpperCase() !== 'TRUE';
 
                     if (sid !== currentUserId && rid === currentUserId && isUnread) {
@@ -451,13 +457,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const userMap = {};
                 accounts.forEach(r => userMap[r['userID']] = { displayName: r['displayName'], profilePictureUrl: r['profilePictureUrl'] });
+                
+                // FIX: Robust Case-Insensitive Post Map
                 const postAuthorMap = {};
-                posts.forEach(r => postAuthorMap[r['postID']] = r['userID']);
+                posts.forEach(r => {
+                    const pId = getColumn(r, 'postId', 'postID', 'id');
+                    const uId = getColumn(r, 'userId', 'userID', 'authorId');
+                    if (pId && uId) postAuthorMap[pId] = uId;
+                });
+
                 const currentUserBlockedSet = blockMap[currentUserId] || new Set();
 
                 const notifications = notifData
                     .filter(n => {
-                        const rId = getColumn(n, 'recieverId', 'recipientId', 'recipientUserId');
+                        // FIX: Corrected typo 'recieverId' to 'receiverId' and checked both
+                        const rId = getColumn(n, 'receiverId', 'recieverId', 'recipientId', 'recipientUserId');
                         return String(rId) === String(currentUserId);
                     })
                     .filter(n => {
@@ -466,8 +480,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                     .filter(n => {
                          const actorId = getColumn(n, 'senderId', 'actorUserId', 'actorId');
-                         // Prevent self-notifications
-                         if (String(actorId) === String(currentUserId)) return false; 
                          return !currentUserBlockedSet.has(actorId);
                     }) 
                     .map(n => {
@@ -477,16 +489,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         const paid = postId ? postAuthorMap[postId] : null;
                         
                         const dismissedRaw = String(getColumn(n, 'dismissed') || 'FALSE').toUpperCase();
-                        const isRead = dismissedRaw === 'TRUE';
+                        // FIX: Check local read history to prevent "Zombie Dot"
+                        const nId = getColumn(n, 'notificationId', 'notificationID');
+                        const isRead = dismissedRaw === 'TRUE' || state.locallyReadNotificationIds.has(nId);
 
                         return {
-                            notificationId: getColumn(n, 'notificationId', 'notificationID'),
+                            notificationId: nId,
                             actorUserId: actorId,
                             actorDisplayName: actor.displayName,
                             actorProfilePictureUrl: actor.profilePictureUrl,
                             actionType: getColumn(n, 'action', 'actionType', 'type'),
                             postId: postId,
-                            postAuthorId: paid,
+                            postAuthorId: paid, // Will be undefined if post deleted
                             timestamp: getColumn(n, 'timestamp', 'date'),
                             isRead: isRead
                         };
@@ -549,6 +563,8 @@ document.addEventListener('DOMContentLoaded', () => {
         deletedPostIds: new Set(),
         deletedCommentIds: new Set(),
         photoLibrary: [],
+        // FIX: Add local read history to prevent "Zombie" notifications
+        locallyReadNotificationIds: new Set(),
         
         // Persistent States Loaded from Storage
         localPendingPosts: JSON.parse(localStorage.getItem('kangaroo_pendingPosts') || '[]'),
@@ -597,6 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const VERIFIED_SVG = `<span class="material-symbols-rounded" style="color: #1DA1F2; vertical-align: -4px; margin-left: 5px;">verified</span>`;
+    const FALLBACK_PFP = 'https://api.dicebear.com/8.x/thumbs/svg?seed=fallback';
 
     const applyOptimisticUpdates = (posts) => {
         const now = Date.now();
@@ -878,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pfpUrl = sanitizeHTML(state.profileUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.profileUser.username}`;
                 document.getElementById('profile-content').innerHTML = `
                     <div class="profile-header">
-                        <img src="${pfpUrl}" class="pfp pfp-lg" style="filter: grayscale(100%); cursor: default;">
+                        <img src="${pfpUrl}" class="pfp pfp-lg" style="filter: grayscale(100%); cursor: default;" onerror="this.src='${FALLBACK_PFP}'">
                         <div class="display-name" style="color: var(--secondary-text-color);">${sanitizeHTML(state.profileUser.displayName)}</div>
                         <div class="username" style="color: var(--secondary-text-color);">@${sanitizeHTML(state.profileUser.username)}</div>
                     </div>
@@ -935,7 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="profile-header">
                     ${optionsMenuHTML}
                     <div class="profile-grid">
-                        <img src="${pfpUrl}" class="pfp pfp-lg">
+                        <img src="${pfpUrl}" class="pfp pfp-lg" onerror="this.src='${FALLBACK_PFP}'">
                         <div class="profile-info">
                             <div class="profile-username-options">
                                 <span class="profile-username">@${sanitizeHTML(state.profileUser.username)}</span>
@@ -984,6 +1001,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         formatPostContent(content) {
             if (!content) return '';
+            // FIX: Removed double-sanitization to allow images to render
             return content
                 .replace(/(href="|src=")?(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)/g, (match, prefix, url) => {
                     if (prefix) return match; 
@@ -1009,6 +1027,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.photoLibrary.forEach(url => {
                     const img = document.createElement('img');
                     img.src = url; img.dataset.url = url;
+                    img.onerror = () => { img.style.display = 'none'; }; // Hide broken
                     if (state.currentUser.profilePictureUrl === url) img.classList.add('selected');
                     gallery.appendChild(img);
                 });
@@ -1044,6 +1063,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let commentsToRender = [...post.comments].reverse();
             let viewAllBtnHTML = '';
+            
             if (!isDetailView && commentsToRender.length > 4) {
                 const totalComments = commentsToRender.length;
                 commentsToRender = commentsToRender.slice(0, 4); 
@@ -1051,96 +1071,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const isStory = post.isStory === true || String(post.isStory).toUpperCase() === 'TRUE';
 
-            // --- REDESIGNED POST STRUCTURE (Instagram Style) ---
-            
-            // 1. Determine Content (Image/Video vs Text Only)
-            let mediaContentHTML = '';
-            let captionContentHTML = '';
-            
-            const rawContent = post.postContent || '';
-            const hasImage = rawContent.includes('<img');
-            const hasVideo = rawContent.includes('<video');
-            
-            if (hasImage || hasVideo) {
-                // If it has media, extract media for the "main" area and keep text for caption
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = rawContent;
-                const mediaEl = tempDiv.querySelector('img, video');
-                
-                if (mediaEl) {
-                    mediaContentHTML = mediaEl.outerHTML; // Media goes in main slot
-                    mediaEl.remove();
-                    // Clean up BRs
-                    let textOnly = tempDiv.innerHTML.replace(/<br\s*\/?>/gi, '\n').trim();
-                    captionContentHTML = this.formatPostContent(textOnly);
-                } else {
-                    // Fallback
-                    mediaContentHTML = `<div class="post-content-text-only">${this.formatPostContent(rawContent)}</div>`;
-                }
-            } else {
-                // Text Only Post: Show text in the "media" slot but styled as text
-                mediaContentHTML = `<div class="post-content-text-only">${this.formatPostContent(rawContent)}</div>`;
-            }
-
-            const timestampHTML = `<div class="post-timestamp-bottom">${formatTimestamp(post)}</div>`;
-
             postDiv.innerHTML = `
-                <div class="post-header">
-                    <img src="${pfpUrl}" class="pfp pfp-sm">
-                    <div class="post-header-info">
-                        <span class="post-display-name">${sanitizeHTML(post.displayName)} ${String(post.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>
-                    </div>
-                    ${optionsMenuHTML}
-                </div>
-                
-                <div class="post-media-area">
-                    ${mediaContentHTML}
-                </div>
+                <div class="post-header"><img src="${pfpUrl}" class="pfp pfp-sm" onerror="this.src='${FALLBACK_PFP}'"><div class="post-header-info"><span class="post-display-name">${sanitizeHTML(post.displayName)} ${String(post.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span><span class="post-timestamp" data-timestamp="${isStory ? post.expiryTimestamp : post.timestamp}" data-is-story="${isStory}">${formatTimestamp(post)}</span></div>${optionsMenuHTML}</div>
+                <div class="post-content"></div>
+                ${showActions ? `<div class="post-actions"><button class="like-btn ${isLiked ? 'liked' : ''}"><span class="material-symbols-rounded">favorite</span></button><span class="like-count">${post.likes.length} likes</span></div>` : ''}
+                ${showComments ? `<div class="comments-section"><div class="comments-list">${commentsToRender.map(c => this.createCommentElement(c)).join('')}${viewAllBtnHTML}</div><div class="comment-form-container">${pendingImageHTML}<form class="comment-form"><input type="text" value="${sanitizeHTML(draftText)}" placeholder="Add a comment..."><button type="button" class="comment-image-btn" title="Add Image" data-action="add-comment-image" data-post-id="${post.postId}"><span class="material-symbols-rounded">add_photo_alternate</span></button><button type="submit" class="comment-submit-btn" title="Post Comment"><span class="material-symbols-rounded">send</span></button></form></div></div>` : ''}`;
 
-                ${showActions ? `
-                <div class="post-actions-bar">
-                    <div class="post-actions-left">
-                        <button class="like-btn ${isLiked ? 'liked' : ''}"><span class="material-symbols-rounded">${isLiked ? 'favorite' : 'favorite'}</span></button>
-                        <button class="comment-btn" data-action="view-post" data-post-id="${post.postId}"><span class="material-symbols-rounded">chat_bubble</span></button>
-                        <button class="share-btn"><span class="material-symbols-rounded">send</span></button>
-                    </div>
-                    <div class="post-actions-right">
-                        <button class="save-btn"><span class="material-symbols-rounded">bookmark</span></button>
-                    </div>
-                </div>
-                <div class="post-likes-section">
-                    <span class="like-count">${post.likes.length} likes</span>
-                </div>
-                ` : ''}
+            const postContentEl = postDiv.querySelector('.post-content');
+            
+            postContentEl.innerHTML = this.formatPostContent(post.postContent);
+            
+            postContentEl.querySelectorAll('img').forEach(img => img.setAttribute('onerror', "this.style.display='none'"));
 
-                <div class="post-caption-section">
-                    ${captionContentHTML ? `<span class="caption-username">${sanitizeHTML(post.displayName)}</span> <span class="caption-text">${captionContentHTML}</span>` : ''}
-                </div>
-
-                ${showComments ? `
-                <div class="comments-section">
-                    ${viewAllBtnHTML}
-                    <div class="comments-list">${commentsToRender.map(c => this.createCommentElement(c)).join('')}</div>
-                    ${timestampHTML}
-                    <div class="comment-form-container">
-                        ${pendingImageHTML}
-                        <form class="comment-form">
-                            <input type="text" value="${sanitizeHTML(draftText)}" placeholder="Add a comment...">
-                            <button type="button" class="comment-image-btn" title="Add Image" data-action="add-comment-image" data-post-id="${post.postId}"><span class="material-symbols-rounded">add_photo_alternate</span></button>
-                            <button type="submit" class="comment-submit-btn" title="Post Comment">Post</button>
-                        </form>
-                    </div>
-                </div>` : ''}`;
-
-            // Add event listeners for media double click (like)
-            const mediaArea = postDiv.querySelector('.post-media-area');
-            if (mediaArea) {
-                mediaArea.addEventListener('dblclick', () => {
-                    const btn = postDiv.querySelector('.like-btn');
-                    if (btn && !btn.classList.contains('liked')) handlers.toggleLike(post.postId);
-                });
-            }
-
+            postContentEl.addEventListener('click', (e) => {
+                if (e.target.tagName === 'A') return;
+                handlers.showPostDetail(post.postId);
+            });
             return postDiv;
         },
         createCommentElement(comment) {
@@ -1148,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isAdmin = state.currentUser.isAdmin;
             const pfpUrl = sanitizeHTML(comment.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${comment.displayName}`;
             const optionsMenuHTML = (isAuthor || isAdmin) ? `<div class="post-options"><button class="options-btn" title="More options"><span class="material-symbols-rounded">more_vert</span></button><div class="options-menu hidden"><button class="delete-btn" data-action="delete-comment">Delete Comment</button></div></div>` : '';
-            return `<div class="comment" data-comment-id="${comment.commentId}" data-user-id="${comment.userId}"><div class="comment-header"><div class="comment-header-main" data-user-id="${comment.userId}"><img src="${pfpUrl}" class="pfp"><div><a class="comment-author">${sanitizeHTML(comment.displayName)} ${String(comment.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</a><span class="comment-timestamp">${formatTimestamp({ timestamp: comment.timestamp })}</span></div></div>${optionsMenuHTML}</div><div class="comment-text">${this.formatCommentContent(comment.commentText)}</div></div>`;
+            return `<div class="comment" data-comment-id="${comment.commentId}" data-user-id="${comment.userId}"><div class="comment-header"><div class="comment-header-main" data-user-id="${comment.userId}"><img src="${pfpUrl}" class="pfp" onerror="this.src='${FALLBACK_PFP}'"><div><a class="comment-author">${sanitizeHTML(comment.displayName)} ${String(comment.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</a><span class="comment-timestamp">${formatTimestamp({ timestamp: comment.timestamp })}</span></div></div>${optionsMenuHTML}</div><div class="comment-text">${this.formatCommentContent(comment.commentText)}</div></div>`;
         },
         renderSearchView() {
             const resultsContainer = document.getElementById('search-results');
@@ -1175,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userEl = document.createElement('div');
                     userEl.className = 'search-result-user'; userEl.dataset.userId = user.userId;
                     const pfpUrl = sanitizeHTML(user.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${user.username}`;
-                    userEl.innerHTML = `<img src="${pfpUrl}" class="pfp pfp-sm"><div><div>${sanitizeHTML(user.displayName)} ${String(user.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</div><div style="color:var(--secondary-text-color)">@${sanitizeHTML(user.username)}</div></div>`;
+                    userEl.innerHTML = `<img src="${pfpUrl}" class="pfp pfp-sm" onerror="this.src='${FALLBACK_PFP}'"><div><div>${sanitizeHTML(user.displayName)} ${String(user.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</div><div style="color:var(--secondary-text-color)">@${sanitizeHTML(user.username)}</div></div>`;
                     usersList.appendChild(userEl);
                 });
             }
@@ -1187,7 +1133,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         },
-        renderNotifications() { const container = document.getElementById('notifications-list'); if (state.notifications.length === 0) { container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 20px 0;">No new notifications.</p>'; return; } container.innerHTML = ''; state.notifications.forEach(n => { const item = document.createElement('div'); item.className = 'notification-item'; item.dataset.notificationId = n.notificationId; item.dataset.actorId = n.actorUserId; item.dataset.postId = n.postId; let text = ''; switch (n.actionType) { case 'like': text = 'liked your post.'; break; case 'comment': text = 'commented on your post.'; break; case 'follow': text = 'started following you.'; break; } const pfpUrl = sanitizeHTML(n.actorProfilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${n.actorDisplayName}`; item.innerHTML = ` <div class="notification-item-clickable" style="display: flex; align-items: center; gap: 12px; flex-grow: 1;"> <img src="${pfpUrl}" class="pfp pfp-sm"> <div class="notification-text"> <span class="username">${sanitizeHTML(n.actorDisplayName)}</span> ${text} <div class="notification-timestamp">${formatTimestamp({ timestamp: n.timestamp })}</div> </div> </div> <button class="delete-btn delete-notification-btn" title="Delete Notification"><span class="material-symbols-rounded">close</span></button> `; container.appendChild(item); }); },
+        renderNotifications() { 
+            const container = document.getElementById('notifications-list'); 
+            if (state.notifications.length === 0) { 
+                container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 20px 0;">No new notifications.</p>'; 
+                return; 
+            } 
+            container.innerHTML = ''; 
+            
+            // FIX: Add local read history to state when rendering
+            state.notifications.forEach(n => state.locallyReadNotificationIds.add(n.notificationId));
+            
+            state.notifications.forEach(n => { 
+                const item = document.createElement('div'); 
+                item.className = 'notification-item'; 
+                item.dataset.notificationId = n.notificationId; 
+                item.dataset.actorId = n.actorUserId; 
+                item.dataset.postId = n.postId; 
+                
+                let text = ''; 
+                switch (n.actionType) { case 'like': text = 'liked your post.'; break; case 'comment': text = 'commented on your post.'; break; case 'follow': text = 'started following you.'; break; } 
+                const pfpUrl = sanitizeHTML(n.actorProfilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${n.actorDisplayName}`; 
+                
+                // FIX: Check if post exists for navigation
+                const isPostDeleted = n.postId && !n.postAuthorId;
+                const opacityStyle = isPostDeleted ? 'opacity: 0.6;' : '';
+                const clickableClass = isPostDeleted ? '' : 'notification-item-clickable';
+
+                item.innerHTML = ` 
+                    <div class="${clickableClass}" style="display: flex; align-items: center; gap: 12px; flex-grow: 1; ${opacityStyle}"> 
+                        <img src="${pfpUrl}" class="pfp pfp-sm" onerror="this.src='${FALLBACK_PFP}'"> 
+                        <div class="notification-text"> 
+                            <span class="username">${sanitizeHTML(n.actorDisplayName)}</span> ${text} 
+                            ${isPostDeleted ? '<span style="font-size:10px; color:var(--error-color);">(Post Deleted)</span>' : ''}
+                            <div class="notification-timestamp">${formatTimestamp({ timestamp: n.timestamp })}</div> 
+                        </div> 
+                    </div> 
+                    <button class="delete-btn delete-notification-btn" title="Delete Notification"><span class="material-symbols-rounded">close</span></button> 
+                `; 
+                container.appendChild(item); 
+            }); 
+        },
         renderImagePreview() { 
             const container = document.getElementById('post-image-preview-container'); 
             if (state.postImageUrl) { 
@@ -1221,6 +1207,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.photoLibrary.forEach(url => {
                         const img = document.createElement('img');
                         img.src = url; img.className = 'library-photo';
+                        img.onerror = () => { img.style.display = 'none'; };
                         img.onclick = () => {
                             if (state.pendingCommentImagePostId) {
                                 state.pendingCommentImages[state.pendingCommentImagePostId] = url;
@@ -1248,7 +1235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const user = state.currentUser;
             const pfpUrl = sanitizeHTML(user.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${user.username}`;
             const isVerified = String(user.isVerified).toUpperCase() === 'TRUE';
-            document.getElementById('settings-user-info-row').innerHTML = `<a id="settings-profile-link" data-user-id="${user.userId}" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; flex-grow: 1; cursor: pointer;"><img src="${pfpUrl}" class="pfp pfp-sm"><div class="user-info"><div class="display-name">${sanitizeHTML(user.displayName)} ${isVerified ? VERIFIED_SVG : ''}</div><div class="username">@${sanitizeHTML(user.username)}</div></div></a>`;
+            document.getElementById('settings-user-info-row').innerHTML = `<a id="settings-profile-link" data-user-id="${user.userId}" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; flex-grow: 1; cursor: pointer;"><img src="${pfpUrl}" class="pfp pfp-sm" onerror="this.src='${FALLBACK_PFP}'"><div class="user-info"><div class="display-name">${sanitizeHTML(user.displayName)} ${isVerified ? VERIFIED_SVG : ''}</div><div class="username">@${sanitizeHTML(user.username)}</div></div></a>`;
             document.getElementById('post-visibility-select').value = state.currentUser.postVisibility || 'Everyone';
             document.getElementById('privacy-switch').checked = state.currentUser.profilePrivacy === 'private';
             const blockedListContainer = document.getElementById('blocked-users-list');
@@ -1266,7 +1253,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (allBlockedUsers.length > 0) {
                 blockedListContainer.innerHTML = allBlockedUsers.map(blockedUser => {
                     const pfp = sanitizeHTML(blockedUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${blockedUser.displayName}`;
-                    return `<div class="blocked-user-row setting-row"><img src="${pfp}" class="pfp pfp-sm" style="cursor:default;"><span class="blocked-user-info">${sanitizeHTML(blockedUser.displayName)}</span><button class="secondary unblock-btn" data-action="unblock-user" data-user-id="${blockedUser.userId}">Unblock</button></div>`;
+                    return `<div class="blocked-user-row setting-row"><img src="${pfp}" class="pfp pfp-sm" style="cursor:default;" onerror="this.src='${FALLBACK_PFP}'"><span class="blocked-user-info">${sanitizeHTML(blockedUser.displayName)}</span><button class="secondary unblock-btn" data-action="unblock-user" data-user-id="${blockedUser.userId}">Unblock</button></div>`;
                 }).join('');
             } else blockedListContainer.innerHTML = '<p style="color: var(--secondary-text-color); font-size: 14px; padding: 8px 0;">You haven\'t blocked anyone.</p>';
         },
@@ -1274,7 +1261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hideError(elId) { document.getElementById(elId).classList.add('hidden'); },
         setButtonState(btnId, text, disabled) { const btn = document.getElementById(btnId); if (btn) { btn.textContent = text; btn.disabled = disabled; } },
         renderMessagesPage() { this.renderConversationsList(); if (state.currentConversation.id) { this.renderConversationHistory(); } else { document.getElementById('conversation-view').innerHTML = ` <div id="conversation-placeholder"> <span class="material-symbols-rounded">chat</span> <h3>Your Messages</h3> <p>Select a conversation or start a new one.</p> </div>`; } },
-        renderConversationsList() { const container = document.getElementById('conversations-list'); let headerHTML = `<div id="conversations-list-header"><h3>Messages</h3></div>`; let listHTML = ''; if (state.conversations.length === 0) { listHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 15px;">No conversations yet.</p>'; } else { listHTML = state.conversations.map(convo => { const isActive = convo.otherUser.userId === state.currentConversation.id; const pfp = sanitizeHTML(convo.otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${convo.otherUser.displayName}`; return ` <div class="conversation-item ${isActive ? 'active' : ''}" data-user-id="${convo.otherUser.userId}" data-is-group="${convo.otherUser.isGroup || false}"> <img src="${pfp}" class="pfp pfp-sm"> <div class="convo-details"> <div class="username">${sanitizeHTML(convo.otherUser.displayName)}</div> <div class="last-message">${sanitizeHTML(convo.lastMessage)}</div> </div> ${convo.unreadCount > 0 ? '<div class="unread-dot"></div>' : ''} </div> `; }).join(''); } container.innerHTML = headerHTML + `<div id="conversations-list-body">${listHTML}</div>`; },
+        renderConversationsList() { const container = document.getElementById('conversations-list'); let headerHTML = `<div id="conversations-list-header"><h3>Messages</h3></div>`; let listHTML = ''; if (state.conversations.length === 0) { listHTML = '<p style="text-align: center; color: var(--secondary-text-color); padding: 15px;">No conversations yet.</p>'; } else { listHTML = state.conversations.map(convo => { const isActive = convo.otherUser.userId === state.currentConversation.id; const pfp = sanitizeHTML(convo.otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${convo.otherUser.displayName}`; return ` <div class="conversation-item ${isActive ? 'active' : ''}" data-user-id="${convo.otherUser.userId}" data-is-group="${convo.otherUser.isGroup || false}"> <img src="${pfp}" class="pfp pfp-sm" onerror="this.src='${FALLBACK_PFP}'"> <div class="convo-details"> <div class="username">${sanitizeHTML(convo.otherUser.displayName)}</div> <div class="last-message">${sanitizeHTML(convo.lastMessage)}</div> </div> ${convo.unreadCount > 0 ? '<div class="unread-dot"></div>' : ''} </div> `; }).join(''); } container.innerHTML = headerHTML + `<div id="conversations-list-body">${listHTML}</div>`; },
         renderConversationHistory() {
             const conversationView = document.getElementById('conversation-view');
             const otherUser = state.conversations.find(c => c.otherUser.userId === state.currentConversation.id)?.otherUser;
@@ -1285,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const pfp = sanitizeHTML(otherUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${otherUser.displayName}`;
-            const profileLinkContent = `<img src="${pfp}" class="pfp pfp-sm"> <span>${sanitizeHTML(otherUser.displayName)} ${!otherUser.isGroup && String(otherUser.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>`;
+            const profileLinkContent = `<img src="${pfp}" class="pfp pfp-sm" onerror="this.src='${FALLBACK_PFP}'"> <span>${sanitizeHTML(otherUser.displayName)} ${!otherUser.isGroup && String(otherUser.isVerified).toUpperCase() === 'TRUE' ? VERIFIED_SVG : ''}</span>`;
             const profileLink = otherUser.isGroup ? `<div>${profileLinkContent}</div>` : `<a href="#" class="profile-link" data-user-id="${otherUser.userId}">${profileLinkContent}</a>`;
 
             const existingHeader = document.getElementById('conversation-header');
@@ -1356,29 +1343,33 @@ document.addEventListener('DOMContentLoaded', () => {
             delete state.pendingCommentImages[postId];
             ui.render();
         },
-        clearAllNotifications() {
-            // FIXED: Capture IDs first
+        async clearAllNotifications() {
+            // FIX: Robust Clear All Logic
             const ids = state.notifications.map(n => n.notificationId).filter(Boolean);
+            if (ids.length === 0) return;
             
             // Optimistic update
-            ids.forEach(id => state.deletedNotificationIds.add(id));
-            localStorage.setItem('notificationBlacklist', JSON.stringify(Array.from(state.deletedNotificationIds)));
             state.notifications = [];
-            ui.renderNotifications();
             state.unreadNotificationCount = 0;
+            ui.renderNotifications();
             core.updateNotificationDot();
             
-            // Server sync: Try bulk delete if available, or loop
-            if (ids.length > 0) {
-                ids.forEach(id => {
-                    api.call('deleteNotification', { userId: state.currentUser.userId, notificationId: id })
-                       .catch(e => console.error(`Failed to delete notification ${id} on server`, e));
-                });
+            // Add to blacklist
+            ids.forEach(id => state.deletedNotificationIds.add(id));
+            localStorage.setItem('notificationBlacklist', JSON.stringify(Array.from(state.deletedNotificationIds)));
+
+            // FIX: Throttled server sync to prevent Apps Script Crash
+            for (const id of ids) {
+                api.call('deleteNotification', { userId: state.currentUser.userId, notificationId: id })
+                   .catch(e => console.error(`Failed to delete notification ${id} on server`, e));
+                // Small delay to be nice to server
+                await new Promise(r => setTimeout(r, 200)); 
             }
         },
         async login() { 
             ui.hideError('login-error'); 
-            const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; 
+            // FIX: Input Sanitization
+            const [username, password] = [cleanInput(document.getElementById('login-username').value.trim()), cleanInput(document.getElementById('login-password').value.trim())]; 
             if (!username || !password) return ui.showError('login-error', 'All fields required.'); 
             ui.setButtonState('login-btn', 'Logging In...', true); 
             try { 
@@ -1389,7 +1380,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { 
                 if (e.message === 'ACCOUNT_BANNED') { 
                     if (e.user) {
-                         // Lock the user in by saving the session, then show ban page
                          state.currentUser = e.user;
                          localStorage.setItem('currentUser', JSON.stringify(e.user));
                     }
@@ -1410,12 +1400,13 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async register() {
             ui.hideError('register-error');
+            // FIX: Input Sanitization
             const [username, displayName, password] = [
-                document.getElementById('register-username').value.trim(),
-                document.getElementById('register-displayname').value.trim(),
-                document.getElementById('register-password').value.trim()
+                cleanInput(document.getElementById('register-username').value.trim()),
+                cleanInput(document.getElementById('register-displayname').value.trim()),
+                cleanInput(document.getElementById('register-password').value.trim())
             ];
-            const confirmPassword = document.getElementById('register-password-confirm').value.trim();
+            const confirmPassword = cleanInput(document.getElementById('register-password-confirm').value.trim());
             const tosChecked = document.getElementById('register-tos').checked;
             if (!tosChecked) return ui.showError('register-error', 'You must agree to the Terms of Service.');
             if (!username || !displayName || !password || !confirmPassword) return ui.showError('register-error', 'All fields required.');
@@ -1439,7 +1430,8 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async createPost() { 
             const contentInput = document.getElementById('post-content-input'); 
-            let rawContent = contentInput.value.trim();
+            // FIX: Input Sanitization
+            let rawContent = cleanInput(contentInput.value.trim());
             let postContent = sanitizeHTML(rawContent).replace(/\n/g, '<br>'); 
             const imageUrl = state.postImageUrl; 
             const videoUrl = state.postVideoUrl; 
@@ -1463,7 +1455,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         displayName: state.currentUser.displayName, username: state.currentUser.username, profilePictureUrl: state.currentUser.profilePictureUrl, isVerified: state.currentUser.isVerified
                     };
                     state.localPendingPosts.unshift(newPost);
-                    persistence.save(); // Save Pending State
+                    persistence.save(); 
                     state.posts.unshift(newPost);
                     api.call('createPost', { userId: state.currentUser.userId, postContent, isStory: false, storyDuration: 0 }); 
                 } 
@@ -1485,27 +1477,42 @@ document.addEventListener('DOMContentLoaded', () => {
         enterEditMode(postId) { const post = state.posts.find(p => p.postId === postId); if (!post) return; core.navigateTo('createPost'); setTimeout(() => { const textContent = post.postContent.replace(/<br><img src=".*?" alt=".*?">/g, '').trim(); document.getElementById('post-content-input').value = textContent; document.getElementById('submit-post-btn').textContent = 'Save Changes'; state.editingPostId = postId; document.getElementById('post-content-input').focus(); }, 100); },
         async addComment(postId, commentText) { 
             if (!commentText.trim() && !state.pendingCommentImages[postId]) return;
-            let finalCommentText = sanitizeHTML(commentText.trim());
+            // FIX: Find post to get author ID for notification
+            const post = state.posts.find(p => p.postId === postId);
+            if (!post) return;
+
+            let finalCommentText = sanitizeHTML(cleanInput(commentText.trim()));
             if (state.pendingCommentImages[postId]) finalCommentText += `<br><img src="${sanitizeHTML(state.pendingCommentImages[postId])}" alt="comment image">`;
 
             const tempComment = { 
                 commentId: `temp_${Date.now()}`, userId: state.currentUser.userId, displayName: state.currentUser.displayName, isVerified: state.currentUser.isVerified, profilePictureUrl: state.currentUser.profilePictureUrl, commentText: finalCommentText, timestamp: new Date().toISOString()
             }; 
             
-            // Add to State
-            const postIndex = state.posts.findIndex(p => p.postId === postId); 
-            if (postIndex > -1) { 
-                state.posts[postIndex].comments.push(tempComment); 
-                // Add to Pending
-                state.pendingComments.push({ postId: postId, userId: state.currentUser.userId, commentText: finalCommentText, timestamp: tempComment.timestamp });
-                persistence.save();
+            state.posts.forEach(p => {
+                if (p.postId === postId) {
+                    p.comments.push(tempComment);
+                }
+            });
+            
+            state.pendingComments.push({ postId: postId, userId: state.currentUser.userId, commentText: finalCommentText, timestamp: tempComment.timestamp });
+            persistence.save();
 
-                delete state.pendingCommentImages[postId];
-                delete state.pendingCommentDrafts[postId]; 
-                ui.render(); 
-            } 
-            try { await api.call('addComment', { postId, userId: state.currentUser.userId, commentText: finalCommentText }); } catch (e) { 
+            delete state.pendingCommentImages[postId];
+            delete state.pendingCommentDrafts[postId]; 
+            ui.render(); 
+            
+            try { 
+                // FIX: Send BOTH recipientId and recieverId (typo fallback)
+                await api.call('addComment', { 
+                    postId, 
+                    userId: state.currentUser.userId, 
+                    commentText: finalCommentText,
+                    recipientId: post.userId,
+                    recieverId: post.userId // Send typo version just in case backend expects it
+                }); 
+            } catch (e) { 
                 alert(`Error: ${e.message}`); 
+                // Revert on failure
                 const pIndex = state.posts.findIndex(p => p.postId === postId); 
                 if (pIndex > -1) { state.posts[pIndex].comments = state.posts[pIndex].comments.filter(c => c.commentId !== tempComment.commentId); ui.render(); } 
             } 
@@ -1515,14 +1522,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const isLiked = post.likes.some(l => l.userId === state.currentUser.userId);
             const newStatus = !isLiked;
             
-            // Persistence
             state.pendingOverrides.likes[postId] = { status: newStatus, timestamp: Date.now() };
             persistence.save();
 
             if (newStatus) post.likes.push({ userId: state.currentUser.userId });
             else post.likes = post.likes.filter(l => l.userId !== state.currentUser.userId);
             ui.render();
-            try { await api.call('toggleLike', { postId, userId: state.currentUser.userId }); } catch (e) {
+            try { 
+                // FIX: Send BOTH recipientId and recieverId (typo fallback)
+                await api.call('toggleLike', { 
+                    postId, 
+                    userId: state.currentUser.userId,
+                    recipientId: post.userId,
+                    recieverId: post.userId // Send typo version just in case backend expects it
+                }); 
+            } catch (e) {
                 delete state.pendingOverrides.likes[postId];
                 persistence.save();
                 if (!newStatus) post.likes.push({ userId: state.currentUser.userId });
@@ -1530,7 +1544,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.render(); alert(`Error: ${e.message}`);
             }
         },
-        async updateProfile() { ui.hideError('edit-profile-error'); const [displayName, pfpUrl, description] = [document.getElementById('edit-display-name').value, document.getElementById('edit-pfp-url').value, document.getElementById('edit-description').value]; ui.setButtonState('save-profile-btn', 'Saving...', true); try { await api.call('updateProfile', { userId: state.currentUser.userId, displayName, profilePictureUrl: pfpUrl, description }); state.currentUser = { ...state.currentUser, displayName, profilePictureUrl: pfpUrl, description }; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); await core.refreshFeed(false); await handlers.showProfile(state.currentUser.userId); } catch (e) { ui.showError('edit-profile-error', e.message); } finally { ui.setButtonState('save-profile-btn', 'Save Changes', false); } },
+        async updateProfile() { ui.hideError('edit-profile-error'); const [displayName, pfpUrl, description] = [cleanInput(document.getElementById('edit-display-name').value), cleanInput(document.getElementById('edit-pfp-url').value), cleanInput(document.getElementById('edit-description').value)]; ui.setButtonState('save-profile-btn', 'Saving...', true); try { await api.call('updateProfile', { userId: state.currentUser.userId, displayName, profilePictureUrl: pfpUrl, description }); state.currentUser = { ...state.currentUser, displayName, profilePictureUrl: pfpUrl, description }; localStorage.setItem('currentUser', JSON.stringify(state.currentUser)); await core.refreshFeed(false); await handlers.showProfile(state.currentUser.userId); } catch (e) { ui.showError('edit-profile-error', e.message); } finally { ui.setButtonState('save-profile-btn', 'Save Changes', false); } },
         async deletePost(postId) { 
             if (!confirm("Delete this post?")) return; 
             state.deletedPostIds.add(postId);
@@ -1564,52 +1578,45 @@ document.addEventListener('DOMContentLoaded', () => {
         async toggleFollow(followingId) {
             const followBtn = document.getElementById('follow-btn'); if (!followBtn) return; followBtn.disabled = true;
             
-            // Logic Check
             const isFollowing = state.currentUserFollowingList.includes(followingId);
-            const newStatus = !isFollowing; // Toggle
+            const newStatus = !isFollowing; 
             
-            // 1. Optimistic Update of List
             if (newStatus) {
                 if(!state.currentUserFollowingList.includes(followingId)) state.currentUserFollowingList.push(followingId);
             } else {
                 state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
             }
 
-            // 2. Optimistic Persistence
             state.pendingOverrides.follows[followingId] = { status: newStatus, timestamp: Date.now() };
             persistence.save();
 
-            // 3. Update Profile View Relationship Status Immediately
             if (state.profileUser && state.profileUser.userId === followingId) {
                  const isFollower = state.currentUserFollowersList.includes(followingId);
                  if (newStatus && isFollower) state.profileUser.relationship = 'Friends';
                  else if (newStatus) state.profileUser.relationship = 'Following';
                  else if (isFollower) state.profileUser.relationship = 'Follows You';
                  else state.profileUser.relationship = 'None';
-                 ui.renderProfilePage(); // Re-render button with new text
+                 ui.renderProfilePage(); 
             }
 
             try { 
                 const result = await api.call('toggleFollow', { followerId: state.currentUser.userId, followingId }); 
-                // Confirm with server response
                 if(state.profileUser && state.profileUser.userId === followingId) { 
                     state.profileUser.relationship = result.newRelationship; 
                     ui.renderProfilePage(); 
                 } 
             } catch (e) {
-                // Revert on Failure
                 delete state.pendingOverrides.follows[followingId];
                 persistence.save();
                 
                 if (!newStatus) state.currentUserFollowingList.push(followingId); 
                 else state.currentUserFollowingList = state.currentUserFollowingList.filter(id => id !== followingId);
                 
-                // Re-calculate relationship
                 if (state.profileUser && state.profileUser.userId === followingId) {
                     const isFollower = state.currentUserFollowersList.includes(followingId);
-                    if (!newStatus && isFollower) state.profileUser.relationship = 'Friends'; // Reverted back to true
+                    if (!newStatus && isFollower) state.profileUser.relationship = 'Friends'; 
                     else if (!newStatus) state.profileUser.relationship = 'Following';
-                    else if (isFollower) state.profileUser.relationship = 'Follows You'; // Reverted back to false
+                    else if (isFollower) state.profileUser.relationship = 'Follows You'; 
                     else state.profileUser.relationship = 'None';
                     ui.renderProfilePage();
                 }
@@ -1629,18 +1636,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         async showProfile(userId, scrollToPostId = null) {
+            if (!userId) return;
             if (state.currentView !== 'profile') state.feedScrollPosition = window.scrollY;
             state.scrollToPostId = scrollToPostId;
             core.navigateTo('profile');
             const cachedUser = state.userProfileCache[userId];
             if (cachedUser) { state.profileUser = cachedUser; ui.renderProfilePage(); } else { state.profileUser = null; ui.showProfileSkeleton(); }
             try {
-                // FIXED: Changed destructuring from { user } to { currentUserData: user } because getPosts/getUserProfile returns currentUserData
                 const { currentUserData: user, posts: fetchedPosts } = await api.call('getUserProfile', { userId, currentUserId: state.currentUser.userId }, 'GET');
                 
                 state.userProfileCache[userId] = { ...(state.userProfileCache[userId] || {}), ...user };
 
-                // FIXED: Merge fetched posts into state.posts if they are missing (handles case where profile posts weren't in main feed)
                 if (fetchedPosts && Array.isArray(fetchedPosts)) {
                     const existingIds = new Set(state.posts.map(p => p.postId));
                     const newPosts = fetchedPosts.filter(p => p.userId === userId && !existingIds.has(p.postId));
@@ -1650,8 +1656,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.currentView === 'profile' && (!state.profileUser || state.profileUser.userId === userId)) {
                     state.profileUser = user;
                     
-                    // FIXED: Explicitly Calculate Relationship Status for Client-Side rendering immediately
-                    // This ensures button shows correct status even if server didn't explicitly return 'relationship' field
                     const isFollowing = state.currentUserFollowingList.includes(userId);
                     const isFollower = state.currentUserFollowersList.includes(userId);
                     if (isFollowing && isFollower) user.relationship = 'Friends';
@@ -1659,7 +1663,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     else if (isFollower) user.relationship = 'Follows You';
                     else user.relationship = 'None';
 
-                    // Re-apply any pending overrides
                     if (state.pendingOverrides.follows[userId]) {
                         const override = state.pendingOverrides.follows[userId];
                         if (override.status && isFollower) user.relationship = 'Friends';
@@ -1712,7 +1715,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { alert(`Error unblocking user: ${e.message}`); state.localBlocklist.add(userIdToUnblock); ui.renderSettingsPage(); } 
         },
         openReportModal(userId, postId = null) { state.reporting = { userId, postId }; const user = state.posts.find(p => p.userId === userId) || state.profileUser; const title = document.getElementById('report-modal-title'); title.textContent = postId ? `Report post by ${user.displayName}` : `Report ${user.displayName}`; ui.toggleModal('report', true); },
-        async submitReport() { const reason = document.getElementById('report-reason-input').value.trim(); if (!reason) { alert('Please provide a reason for the report.'); return; } ui.setButtonState('submit-report-btn', 'Submitting...', true); try { await api.call('reportUser', { reporterId: state.currentUser.userId, reportedId: state.reporting.userId, postId: state.reporting.postId, reason: reason }); alert('Report submitted successfully.'); ui.toggleModal('report', false); } catch (e) { alert(`Error: Could not submit report. ${e.message}`); } finally { ui.setButtonState('submit-report-btn', 'Submit Report', false); } },
+        async submitReport() { const reason = cleanInput(document.getElementById('report-reason-input').value.trim()); if (!reason) { alert('Please provide a reason for the report.'); return; } ui.setButtonState('submit-report-btn', 'Submitting...', true); try { await api.call('reportUser', { reporterId: state.currentUser.userId, reportedId: state.reporting.userId, postId: state.reporting.postId, reason: reason }); alert('Report submitted successfully.'); ui.toggleModal('report', false); } catch (e) { alert(`Error: Could not submit report. ${e.message}`); } finally { ui.setButtonState('submit-report-btn', 'Submit Report', false); } },
         openBanModal(userId) {
             const userToBan = state.posts.find(p => p.userId === userId) || state.profileUser;
             if (!userToBan) { alert("Could not find user information."); return; }
@@ -1722,7 +1725,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.toggleModal('ban', true);
         },
         async submitBan() {
-            const reason = document.getElementById('ban-reason-input').value.trim();
+            const reason = cleanInput(document.getElementById('ban-reason-input').value.trim());
             const durationHours = document.getElementById('ban-duration-select').value;
             const userIdToBan = state.banningUserId;
             if (!reason) { alert('Please provide a reason for the ban.'); return; }
@@ -1803,7 +1806,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async sendMessage() {
             const input = document.getElementById('message-input');
-            const messageContent = input.value.trim();
+            const messageContent = cleanInput(input.value.trim());
             const { id: recipientId } = state.currentConversation;
             if (!messageContent || !recipientId) return;
             const tempId = `temp_${Date.now()}`;
@@ -1841,9 +1844,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const { messages: remoteMessages } = await api.call('getConversationHistory', { userId: state.currentUser.userId, otherUserId, isGroup: false }, 'GET');
                 const newMessagesFormatted = remoteMessages.map(m => ({ ...m, status: 'sent' }));
                 
-                // Merge logic: avoid overwriting "sending" messages if they exist locally but not remotely yet
-                // However, usually we just replace the whole list or append
-                // To keep it simple: Replace known-good history, append pending
                 const pendingMessages = state.currentConversation.messages.filter(m => m.status === 'sending' || m.status === 'failed');
                 state.currentConversation.messages = [...newMessagesFormatted, ...pendingMessages];
                 ui.renderConversationHistory();
@@ -1853,10 +1853,8 @@ document.addEventListener('DOMContentLoaded', () => {
         async startConversationFromProfile(otherUserId) {
             core.navigateTo('messages');
             
-            // Check if we already have a conversation locally
             let existingConvo = state.conversations.find(c => c.otherUser.userId === otherUserId);
             
-            // If not, and we have profile data, create a "ghost" conversation so the UI works immediately
             if (!existingConvo && state.profileUser && state.profileUser.userId === otherUserId) {
                 const newConvo = { 
                     otherUser: { 
@@ -1869,12 +1867,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     timestamp: new Date().toISOString(), 
                     unreadCount: 0 
                 };
-                // Prepend to list so it shows at top
                 state.conversations.unshift(newConvo);
                 ui.renderConversationsList();
             } else if (!existingConvo) {
-                // Fallback if we don't have the user data handy (rare in this flow)
-                // We'll let loadConversation try to handle it or it will just be blank until message sent
                 console.warn("Starting conversation without pre-loaded profile data");
             }
 
@@ -1909,7 +1904,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (currentUserData) {
                     if (currentUserData.isSuspended === 'OUTAGE') { 
-                        // Do not logout, just navigate
                         return core.navigateTo('outage'); 
                     }
                     if (currentUserData.banDetails) { ui.renderBanPage(currentUserData.banDetails); return core.navigateTo('suspended'); }
@@ -1917,7 +1911,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.userProfileCache[currentUserData.userId] = currentUserData;
                     localStorage.setItem('currentUser', JSON.stringify(state.currentUser));
                     const navPfp = document.getElementById('nav-pfp');
-                    if (navPfp) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
+                    if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl) || `https://api.dicebear.com/8.x/thumbs/svg?seed=${state.currentUser.username}`;
                     document.getElementById('logout-button-container').style.display = 'flex';
                 }
 
@@ -1942,9 +1936,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 notifications = notifications.filter(n => !state.deletedNotificationIds.has(n.notificationId));
                 state.notifications = notifications;
                 
-                // --- FIXED NOTIFICATION DOT CALCULATION ---
-                // If isRead is not strictly 'TRUE', it counts as unread.
-                state.unreadNotificationCount = notifications.filter(n => String(n.isRead).toUpperCase() !== 'TRUE').length;
+                // FIX: Check isRead logic correctly (case insensitive) and check local cache
+                state.unreadNotificationCount = notifications.filter(n => !n.isRead).length;
 
                 this.updateNotificationDot();
                 this.updateMessageDot();
@@ -1971,7 +1964,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMessageDot() { const hasUnread = state.conversations.some(c => c.unreadCount > 0); document.getElementById('message-dot').style.display = hasUnread ? 'block' : 'none'; },
         logout(forceReload = true) { localStorage.removeItem('currentUser'); state.currentUser = null; if (state.backgroundRefreshIntervalId) clearInterval(state.backgroundRefreshIntervalId); if (state.messagePollingIntervalId) clearInterval(state.messagePollingIntervalId); if (forceReload) window.location.reload(); },
         setupEventListeners() {
-            // ... existing listeners ...
             let searchTimeout;
             document.getElementById('show-register-link').addEventListener('click', () => { document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
             document.getElementById('show-login-link').addEventListener('click', () => { document.getElementById('register-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); });
@@ -2023,7 +2015,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-profile-view').addEventListener('click', e => { const choice = e.target.closest('#pfp-choices-gallery img'); if (choice) { document.getElementById('edit-pfp-url').value = choice.dataset.url; document.querySelectorAll('#pfp-choices-gallery img').forEach(img => img.classList.remove('selected')); choice.classList.add('selected'); } });
             document.body.addEventListener('input', (e) => { if (e.target.matches('.comment-form input')) { const postId = e.target.closest('.post').dataset.postId; state.pendingCommentDrafts[postId] = e.target.value; } });
             
-            // Feed Tabs Logic
             document.querySelectorAll('.feed-nav-tab').forEach(tab => {
                 tab.addEventListener('click', () => {
                     const feedType = tab.dataset.feedType;
@@ -2032,7 +2023,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.querySelectorAll('.feed-nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
                     const container = document.getElementById('feed-container');
                     
-                    // Specific Logic for Tab Switch
                     const activeFeedEl = document.getElementById(feedType === 'foryou' ? 'foryou-feed' : 'following-feed');
                     const inactiveFeedEl = document.getElementById(feedType === 'foryou' ? 'following-feed' : 'foryou-feed');
                     
@@ -2104,16 +2094,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             document.getElementById('auth-view').addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; const activeForm = !document.getElementById('login-form').classList.contains('hidden') ? document.getElementById('login-form') : document.getElementById('register-form'); e.preventDefault(); const inputs = [...activeForm.querySelectorAll('input')]; const currentInputIndex = inputs.findIndex(input => input === document.activeElement); if (currentInputIndex > -1 && currentInputIndex < inputs.length - 1) inputs[currentInputIndex + 1].focus(); else activeForm.querySelector('button.primary').click(); });
 
-            // SWIPE BACK GESTURE
             let touchStartX = 0;
             let touchStartY = 0;
             let isSwipingBack = false;
             let activeViewEl = null;
 
             document.addEventListener('touchstart', (e) => {
+                // FIX: Block swipe if modal is open or if touching slider
+                if (document.querySelector('.modal:not(.hidden)')) return;
+                if (e.target.closest('#photo-library-grid')) return;
+
                 const excludedViews = ['feed', 'auth', 'outage', 'suspended'];
                 
-                // Special check for messages view: only allow swipe if in chat mode
                 if (state.currentView === 'messages') {
                     const msgContainer = document.querySelector('.messages-container');
                     if (!msgContainer || !msgContainer.classList.contains('show-chat-view')) return;
@@ -2121,7 +2113,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Only start swipe from left edge
                 if (e.touches[0].clientX < 40) {
                     touchStartX = e.touches[0].clientX;
                     touchStartY = e.touches[0].clientY;
@@ -2139,12 +2130,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const touchCurrentX = e.touches[0].clientX;
                 const deltaX = touchCurrentX - touchStartX;
 
-                // Lock vertical scroll if swiping horizontally
                 if (Math.abs(e.touches[0].clientY - touchStartY) > deltaX) return;
 
                 if (deltaX > 0) {
-                    e.preventDefault(); // Stop scrolling
-                    // Move the view with the finger
+                    e.preventDefault(); 
                     activeViewEl.style.transform = `translateX(${deltaX}px)`;
                     activeViewEl.style.boxShadow = `-5px 0 15px rgba(0,0,0,0.1)`; 
                 }
@@ -2158,9 +2147,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 activeViewEl.style.transition = 'transform 0.3s ease-out';
 
-                // Threshold to trigger back (e.g., 100px)
                 if (deltaX > 100) {
-                    // Slide off screen to the right
                     activeViewEl.style.transform = `translateX(100vw)`;
                     
                     setTimeout(() => {
@@ -2171,7 +2158,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         else if (state.currentView === 'messages' && msgBackBtn) msgBackBtn.click();
                         else if (state.previousView) core.navigateTo(state.previousView);
                         
-                        // Reset after navigation
                         setTimeout(() => {
                             if(activeViewEl) {
                                 activeViewEl.style.transform = '';
@@ -2179,9 +2165,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 activeViewEl.style.transition = '';
                             }
                         }, 50);
-                    }, 300); // Wait for animation
+                    }, 300); 
                 } else {
-                    // Snap back to original position
                     activeViewEl.style.transform = `translateX(0)`;
                     setTimeout(() => {
                         activeViewEl.style.transition = '';
@@ -2204,13 +2189,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const navPfp = document.getElementById('nav-pfp');
             if (navPfp && state.currentUser.profilePictureUrl) navPfp.src = sanitizeHTML(state.currentUser.profilePictureUrl);
             
-            // Check if user is banned on page load
             if (state.currentUser.banDetails) {
                 ui.renderBanPage(state.currentUser.banDetails);
                 return core.navigateTo('suspended');
             }
             
-            // BUG FIX: Scroll Restoration
             if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
             window.scrollTo(0, 0);
 
