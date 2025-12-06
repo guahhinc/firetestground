@@ -9,7 +9,7 @@
     --warning-color: #FFC107;
     --banner-height: 0px;
     --button-secondary-bg-color: #efefef;
-    --sidebar-width: 244px; /* Standard Sidebar Width */
+    --sidebar-width: 244px;
     --like-color: #ed4956;
 }
 
@@ -37,7 +37,7 @@ html, body {
 }
 
 body {
-    background-color: var(--primary-bg-color); /* Changed to primary for cleaner look */
+    background-color: var(--secondary-bg-color); /* Light grey bg for app */
     color: var(--primary-text-color);
     min-height: 100vh;
     display: flex;
@@ -82,15 +82,16 @@ input:focus, textarea:focus { outline: none; }
     font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
 }
 
-/* --- IMAGES --- */
+/* --- IMAGES & AVATARS --- */
 .pfp {
     border-radius: 50%;
     object-fit: cover;
-    background-color: var(--border-color); /* Fallback color */
+    background-color: var(--border-color);
     flex-shrink: 0;
 }
-.pfp-sm { width: 32px; height: 32px; }
-.pfp-lg { width: 150px; height: 150px; }
+/* Explicit sizes to prevent resizing bugs */
+.pfp-sm { width: 32px; height: 32px; min-width: 32px; } 
+.pfp-lg { width: 77px; height: 77px; min-width: 77px; }
 
 /* --- APP LAYOUT --- */
 #app-wrapper {
@@ -105,7 +106,7 @@ input:focus, textarea:focus { outline: none; }
 
 .container {
     width: 100%;
-    max-width: 470px; /* This restricts the feed width */
+    max-width: 470px;
     margin: 0 auto;
     padding: 0;
 }
@@ -144,9 +145,9 @@ header {
     cursor: pointer;
 }
 
-.header-icon-label { display: none; } /* Hidden on mobile */
-.logo { display: none; } /* Hidden on mobile header */
-#settings-nav-btn { display: none; } /* Hidden on mobile header */
+.header-icon-label { display: none; }
+.logo { display: none; }
+#settings-nav-btn { display: none; }
 
 #notification-dot, #message-dot {
     position: absolute;
@@ -159,37 +160,50 @@ header {
     display: none;
 }
 
-/* --- FEED TABS --- */
+/* --- FEED TABS (Fixed Alignment) --- */
 .feed-nav {
     display: flex;
+    justify-content: center;
+    gap: 20px; /* Space between tabs */
     border-bottom: 1px solid var(--border-color);
-    background-color: var(--primary-bg-color);
+    background-color: var(--primary-bg-color); /* Match post bg */
     position: sticky;
     top: 0; 
     z-index: 90;
-    justify-content: center;
     margin-bottom: 10px;
+    height: 50px;
+    align-items: center;
 }
 
 .feed-nav-tab {
-    flex: 1;
-    text-align: center;
-    padding: 14px 0;
+    padding: 14px 4px; /* Less horizontal padding, let gap handle spacing */
     font-weight: 600;
     color: var(--secondary-text-color);
     cursor: pointer;
     font-size: 15px;
-    max-width: 100px; /* Keep tabs close together */
+    position: relative;
+    opacity: 0.7;
 }
 
 .feed-nav-tab.active {
     color: var(--primary-text-color);
-    border-bottom: 2px solid var(--primary-text-color);
+    opacity: 1;
+}
+
+/* Proper underline */
+.feed-nav-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background-color: var(--primary-text-color);
 }
 
 .feed-nav-actions {
     position: absolute;
-    right: 10px;
+    right: 16px;
     top: 50%;
     transform: translateY(-50%);
 }
@@ -198,18 +212,20 @@ header {
 #feed-container { display: flex; width: 200%; transition: transform 0.3s ease-out; }
 .feed-page { width: 50%; padding-bottom: 60px; }
 
-/* --- POST STYLES (Fixed Layout) --- */
+/* --- POST STYLES --- */
 .post {
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 10px;
+    background-color: var(--primary-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    margin-bottom: 15px;
 }
 
 .post-header {
     display: flex;
     align-items: center;
-    padding: 8px 0;
+    padding: 10px 12px;
     gap: 10px;
+    height: 60px;
 }
 
 .post-display-name {
@@ -218,39 +234,40 @@ header {
     color: var(--primary-text-color);
 }
 
-/* Content Area */
+/* Content Area - STRICT SELECTORS FOR IMAGES */
 .post-media-area {
     width: 100%;
     overflow: hidden;
-    border-radius: 4px;
     background-color: var(--secondary-bg-color);
-    margin: 5px 0;
 }
 
+/* ONLY affect images inside media-area, NOT comments */
 .post-media-area img, 
 .post-media-area video {
     width: 100%;
     height: auto;
     display: block;
-    max-height: 600px;
+    max-height: 700px;
     object-fit: cover;
 }
 
-/* FIXED TEXT POSTS: Removed weird centering */
+/* Text Only Posts */
 .post-content-text-only {
-    padding: 10px 0;
-    font-size: 15px;
-    line-height: 1.5;
+    padding: 30px 20px;
+    font-size: 18px;
+    line-height: 1.4;
     color: var(--primary-text-color);
     white-space: pre-wrap;
     word-break: break-word;
+    text-align: left; /* Reset weird centering */
+    background-color: var(--primary-bg-color);
 }
 
 /* Action Buttons */
 .post-actions-bar {
     display: flex;
     justify-content: space-between;
-    padding: 8px 0;
+    padding: 12px 14px 4px 14px;
 }
 
 .post-actions-left, .post-actions-right {
@@ -266,41 +283,98 @@ header {
 }
 
 /* Likes & Caption */
-.post-likes-section { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.post-likes-section { 
+    font-weight: 600; 
+    font-size: 14px; 
+    padding: 0 14px;
+    margin-bottom: 8px;
+}
 
-.post-caption-section { font-size: 14px; margin-bottom: 6px; line-height: 1.4; }
+.post-caption-section { 
+    padding: 0 14px;
+    font-size: 14px; 
+    margin-bottom: 8px; 
+    line-height: 1.4; 
+}
 .caption-username { font-weight: 600; margin-right: 5px; }
+
+/* --- COMMENTS FIX --- */
+.comments-section {
+    padding: 0 14px 12px 14px;
+}
 
 .view-all-comments-btn {
     color: var(--secondary-text-color);
     font-size: 14px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     text-align: left;
     display: block;
+    width: 100%;
 }
 
-.comments-list .comment {
-    font-size: 14px;
-    margin-bottom: 2px;
+.comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
-.comment-author { font-weight: 600; margin-right: 5px; color: var(--primary-text-color); }
+
+.comment {
+    font-size: 14px;
+    display: flex;
+    align-items: flex-start; /* Top align if multi-line */
+    gap: 0; /* Let text handle spacing */
+    line-height: 1.4;
+}
+
+/* FIX FOR GIANT AVATARS */
+.comments-list .pfp {
+    display: none; /* Hide avatars in feed comments to match IG style, OR force them small */
+}
+
+/* If you want Avatars in comments, uncomment this:
+.comments-list .pfp {
+    display: block;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    margin-right: 8px;
+    border-radius: 50%;
+}
+*/
+
+.comment-author { 
+    font-weight: 600; 
+    margin-right: 6px; 
+    color: var(--primary-text-color); 
+    text-decoration: none;
+}
+
+.comment-text {
+    color: var(--primary-text-color);
+}
 
 .post-timestamp-bottom {
     font-size: 10px;
     color: var(--secondary-text-color);
     text-transform: uppercase;
-    margin-top: 5px;
+    margin-top: 8px;
+    padding-left: 14px; /* Align with padding */
+    margin-bottom: 12px;
 }
 
 /* Comment Input */
 .comment-form-container {
     display: flex;
-    align-items: center;
+    flex-direction: column; /* Allow image preview to stack */
     margin-top: 8px;
-    border-top: 1px solid rgba(0,0,0,0.05);
-    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
 }
-.comment-form { display: flex; width: 100%; gap: 10px; }
+
+.comment-preview-area { display: flex; padding-bottom: 8px; }
+.comment-preview-image { height: 40px; border-radius: 4px; border: 1px solid var(--border-color); }
+
+.comment-form { display: flex; width: 100%; gap: 10px; align-items: center; }
 .comment-form input {
     flex-grow: 1;
     border: none;
@@ -308,13 +382,14 @@ header {
     font-size: 14px;
     color: var(--primary-text-color);
 }
-.comment-submit-btn { color: var(--accent-color); opacity: 1; padding: 0; }
-.comment-submit-btn .material-symbols-rounded { display: none; } /* Hide icon, use text */
+.comment-submit-btn { color: var(--accent-color); opacity: 1; padding: 0; font-size: 14px; }
+.comment-submit-btn .material-symbols-rounded { display: none; }
+.comment-image-btn { padding: 0; color: var(--secondary-text-color); }
 
 /* --- PROFILE --- */
-.profile-header { padding: 20px 0; border-bottom: 1px solid var(--border-color); }
-.profile-grid { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; }
-.profile-info { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.profile-header { padding: 30px 20px 0; border-bottom: 1px solid var(--border-color); background-color: var(--primary-bg-color); }
+.profile-grid { display: flex; gap: 28px; align-items: flex-start; margin-bottom: 24px; }
+.profile-info { display: flex; flex-direction: column; gap: 15px; flex: 1; }
 .profile-username { font-size: 20px; font-weight: 300; }
 .profile-actions-ig button { 
     background-color: var(--button-secondary-bg-color); 
@@ -322,28 +397,50 @@ header {
     border-radius: 8px; 
     color: var(--primary-text-color);
 }
-.profile-stats-ig { display: flex; gap: 30px; font-size: 16px; }
-.profile-stats-ig .stat { display: flex; gap: 5px; }
-.profile-stats-ig span { font-weight: 600; }
+.profile-actions-ig button.primary { background-color: var(--accent-color); color: white; }
+.profile-stats-ig { display: flex; gap: 40px; font-size: 16px; margin-bottom: 20px; }
+.stat { text-align: center; }
+.stat span { font-weight: 600; display: block; }
+.profile-display-name-bio { margin-bottom: 20px; }
 
 /* --- MOBILE SPECIFIC FIXES --- */
 @media (max-width: 767px) {
-    body.logged-in { padding-top: 50px; padding-bottom: 50px; }
-    .container { padding: 0 10px; }
-    .feed-nav { top: 50px; } /* Stick below header if needed, or 0 */
+    body.logged-in { padding-top: 100px; padding-bottom: 50px; } /* Space for Header + Tabs */
+    .container { padding: 0; max-width: 100%; }
+    
+    header {
+        height: 50px;
+        padding-top: 0;
+    }
+    
+    .feed-nav { 
+        top: 0; 
+        z-index: 95;
+        position: fixed;
+        width: 100%;
+        margin-top: 0; /* Reset top margin */
+    }
+    
+    .post { border-left: none; border-right: none; border-radius: 0; }
+    
+    /* On mobile, move nav to bottom */
+    header { top: auto; bottom: 0; border-top: 1px solid var(--border-color); border-bottom: none; }
+    
+    /* Adjust padding for top nav tabs */
+    body.logged-in { padding-top: 50px; } 
 }
 
-/* --- DESKTOP LAYOUT (The Fix) --- */
+/* --- DESKTOP LAYOUT --- */
 @media (min-width: 768px) {
     body.logged-in {
         padding-top: 0;
-        padding-left: var(--sidebar-width); /* Push body content right */
+        padding-left: var(--sidebar-width);
         flex-direction: row;
     }
 
     header {
         width: var(--sidebar-width);
-        height: 100vh; /* Full height sidebar */
+        height: 100vh;
         top: 0;
         left: 0;
         right: auto;
@@ -353,6 +450,7 @@ header {
         padding: 30px 12px 20px 12px;
         border-right: 1px solid var(--border-color);
         border-bottom: none;
+        border-top: none;
     }
 
     .header-actions {
@@ -361,6 +459,7 @@ header {
         height: 100%;
         gap: 8px;
         justify-content: flex-start;
+        width: 100%;
     }
 
     .logo {
@@ -369,6 +468,7 @@ header {
         margin-bottom: 30px;
         padding-left: 12px;
         margin-top: 10px;
+        cursor: pointer;
     }
 
     .header-icon {
@@ -378,9 +478,7 @@ header {
         transition: background-color 0.2s;
     }
 
-    .header-icon:hover {
-        background-color: var(--secondary-bg-color);
-    }
+    .header-icon:hover { background-color: var(--secondary-bg-color); }
 
     .header-icon .material-symbols-rounded {
         font-size: 28px;
@@ -388,61 +486,82 @@ header {
         transition: transform 0.2s;
     }
     
-    .header-icon:hover .material-symbols-rounded {
-        transform: scale(1.05);
-    }
+    .header-icon:hover .material-symbols-rounded { transform: scale(1.05); }
 
-    .header-icon-label {
-        display: block;
-        font-size: 16px;
-        font-weight: 400;
-    }
+    .header-icon-label { display: block; font-size: 16px; font-weight: 400; }
 
-    #settings-nav-btn {
-        display: flex;
-        margin-top: auto; /* Push to bottom */
-    }
+    #settings-nav-btn { display: flex; margin-top: auto; }
 
     /* Feed Layout on Desktop */
     .container {
-        max-width: 600px; /* Slightly wider on desktop */
+        max-width: 630px; 
         margin: 0 auto;
-        padding-top: 40px;
+        padding-top: 30px;
     }
 
     .feed-nav {
-        position: sticky;
-        top: 0;
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(5px);
+        background-color: transparent; 
+        border-bottom: none;
         margin-bottom: 20px;
-        z-index: 10;
+        justify-content: flex-start;
+        padding-left: 10px;
     }
     
-    [data-theme="dark"] .feed-nav { background: rgba(0, 0, 0, 0.9); }
+    /* Make tabs look like simple text headers on desktop */
+    .feed-nav-tab {
+        font-size: 16px;
+        margin-right: 10px;
+        border-bottom: none !important; /* Remove line on desktop */
+        opacity: 0.5;
+    }
+    .feed-nav-tab.active {
+        opacity: 1;
+        font-weight: 700;
+    }
+    .feed-nav-tab.active::after { display: none; }
 
     .post {
         border: 1px solid var(--border-color);
         border-radius: 8px;
         padding-bottom: 0;
-        background-color: var(--primary-bg-color);
     }
-    
-    .post-header { padding: 10px 14px; }
-    .post-actions-bar { padding: 10px 14px; }
-    .post-likes-section, .post-caption-section, .comments-section { padding-left: 14px; padding-right: 14px; }
 }
 
-/* Modals */
+/* --- MESSAGES & SEARCH --- */
+#messages-view .container { max-width: 100%; height: 100%; padding: 0; }
+.messages-container { height: 100vh; background: var(--primary-bg-color); }
+@media(min-width: 768px) { .messages-container { height: 100vh; border: none; } }
+
+#search-input {
+    background-color: var(--secondary-bg-color);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 16px;
+    color: var(--primary-text-color);
+    width: 100%;
+    margin-bottom: 20px;
+}
+.search-result-user { padding: 10px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.search-result-user:hover { background-color: var(--secondary-bg-color); }
+
+/* --- OTHER MODALS --- */
 .modal {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.65);
     z-index: 200;
     display: flex; justify-content: center; align-items: center;
+    backdrop-filter: blur(2px);
 }
 .modal-content {
     background: var(--primary-bg-color);
     padding: 20px;
     border-radius: 12px;
     width: 90%; max-width: 400px;
+    border: 1px solid var(--border-color);
+}
+.options-menu {
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    background-color: var(--primary-bg-color);
 }
