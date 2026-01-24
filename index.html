@@ -245,6 +245,64 @@
             }
         }
 
+
+        /* --- AUTH MODAL CSS (Overrides) --- */
+        #auth-modal .modal-content {
+            background-color: var(--primary-bg-color);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        #auth-modal input {
+            background-color: var(--secondary-bg-color);
+            margin-bottom: 12px;
+        }
+
+        #auth-modal button.primary {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+
+        .auth-switch-link {
+            display: block;
+            margin-top: 15px;
+            color: var(--accent-color);
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+
+        /* --- AUTH MODAL CSS (Overrides) --- */
+        #auth-modal .modal-content {
+            background-color: var(--primary-bg-color);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        #auth-modal input {
+            background-color: var(--secondary-bg-color);
+            margin-bottom: 12px;
+        }
+
+        #auth-modal button.primary {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+
+        .auth-switch-link {
+            display: block;
+            margin-top: 15px;
+            color: var(--accent-color);
+            font-size: 14px;
+            cursor: pointer;
+        }
+
         /* --- LAYOUT & UTILS --- */
         body.in-doomscroll header {
             display: none !important;
@@ -2427,102 +2485,75 @@
         </div>
     </div>
 
-    <div id="toast-notification"></div>
+    <!-- AUTH MODAL -->
+    <div id="auth-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2></h2> <!-- Empty header for strict auth modal style -->
+                <button class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
+            </div>
 
-    <header class="hidden">
-        <img src="https://raw.githubusercontent.com/guahhinc/fire/main/Kangaroo.png" alt="Kangaroo Logo" class="logo"
-            id="logo-btn">
-        <div class="header-actions">
-            <div class="header-icon" id="home-btn">
-                <span class="material-symbols-rounded">home</span>
-                <span class="header-icon-label">Home</span>
+            <img src="https://raw.githubusercontent.com/guahhinc/kangaroo/main/Kangaroo.png"
+                style="height: 50px; margin-bottom: 20px;">
+            <h2 style="margin-bottom: 5px;">Welcome to Kangaroo</h2>
+            <p style="color: var(--secondary-text-color); margin-bottom: 20px;">Sign in to see posts, like, and comment.
+            </p>
+
+            <div id="login-form">
+                <input type="text" id="login-username" placeholder="Username" autocomplete="username">
+                <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+                <button id="login-btn" class="primary">Log In</button>
+                <div class="auth-switch-link" id="show-register-link">Don't have an account? Sign Up</div>
+                <p id="login-error" class="error-message hidden" style="margin-top:10px;"></p>
             </div>
-            <div class="header-icon" id="search-btn">
-                <span class="material-symbols-rounded">search</span>
-                <span class="header-icon-label">Search</span>
-            </div>
-            <div class="header-icon" id="doomscroll-btn">
-                <span class="material-symbols-rounded">slideshow</span>
-                <span class="header-icon-label">Doomscroll</span>
-            </div>
-            <div class="header-icon" id="messages-btn" style="opacity: 0.4; pointer-events: none;"
-                title="Loading fresh messages...">
-                <span class="material-symbols-rounded">mail</span>
-                <span class="header-icon-label">Mail</span>
-                <span id="message-dot"></span>
-            </div>
-            <div class="header-icon" id="notifications-btn">
-                <span class="material-symbols-rounded">notifications</span>
-                <span class="header-icon-label">Notifications</span>
-                <span id="notification-dot"></span>
-            </div>
-            <div class="header-icon" id="profile-nav-btn">
-                <img id="nav-pfp" class="pfp pfp-sm" src="" style="width: 28px; height: 28px; vertical-align: middle;">
-                <span class="header-icon-label">Profile</span>
-            </div>
-            <div class="header-icon" id="settings-nav-btn">
-                <span class="material-symbols-rounded">settings</span>
-                <span class="header-icon-label">Settings</span>
+
+            <div id="register-form" class="hidden">
+                <input type="text" id="register-username" placeholder="Username (a-z, 0-9)" autocomplete="username">
+                <input type="text" id="register-displayname" placeholder="Display Name">
+                <input type="password" id="register-password" placeholder="Password" autocomplete="new-password">
+                <input type="password" id="register-password-confirm" placeholder="Confirm Password"
+                    autocomplete="new-password">
+                <div
+                    style="display: flex; align-items: center; gap: 10px; margin: 10px 0; text-align: left; font-size: 13px;">
+                    <input type="checkbox" id="register-tos" style="width: auto; margin:0;">
+                    <label for="register-tos">I agree to the <a href="https://guahhinc.github.io/guahh/#terms"
+                            target="_blank">Terms of Service</a></label>
+                </div>
+                <button id="register-btn" class="primary" disabled>Sign Up</button>
+                <div class="auth-switch-link" id="show-login-link">Already have an account? Log In</div>
+                <p id="register-error" class="error-message hidden" style="margin-top:10px;"></p>
             </div>
         </div>
-    </header>
-
-    <div id="global-banner" class="hidden"></div>
+    </div>
 
     <div id="app-wrapper">
-        <div id="auth-view" class="view">
-            <div class="container">
-                <img src="https://raw.githubusercontent.com/guahhinc/fire/main/Kangaroo.png" alt="Kangaroo Logo"
-                    class="logo">
-                <div id="auth-container">
-                    <div id="login-form">
-                        <input type="text" id="login-username" placeholder="Username" autocomplete="username">
-                        <input type="password" id="login-password" placeholder="Password"
-                            autocomplete="current-password">
-                        <button id="login-btn" class="primary">Log In</button>
-                        <p id="login-error" class="error-message hidden"></p>
+        <header class="hidden">
+            <div class="container header-actions">
+                <img src="https://raw.githubusercontent.com/guahhinc/kangaroo/main/Kangaroo.png" class="logo"
+                    id="logo-btn" alt="Kangaroo">
+                <button class="header-icon active" id="home-btn"><span
+                        class="material-symbols-rounded">home</span></button>
+                <button class="header-icon" id="search-btn"><span
+                        class="material-symbols-rounded">search</span></button>
+                <button class="header-icon" id="doomscroll-btn"><span
+                        class="material-symbols-rounded">play_circle</span></button>
+                <button class="header-icon" id="messages-btn"><span class="material-symbols-rounded">mail</span><span
+                        id="message-dot" class="nav-dot"></span></button>
+                <button class="header-icon" id="notifications-btn"><span
+                        class="material-symbols-rounded">notifications</span><span id="notification-dot"
+                        class="nav-dot"></span></button>
+                <!-- Profile Button (Dynamic Icon) -->
+                <button class="header-icon pfp-icon-btn" id="profile-nav-btn">
+                    <img src="" id="nav-pfp" class="pfp pfp-sm" style="width: 28px; height: 28px; display: none;">
+                    <span class="material-symbols-rounded" id="nav-pfp-fallback">account_circle</span>
+                </button>
 
-                        <!-- Guahh Integration -->
-                        <div
-                            style="display:flex; align-items:center; gap:10px; margin: 15px 0; width:100%; opacity:0.6;">
-                            <div style="flex:1; height:1px; background:var(--border-color);"></div>
-                            <span style="font-size:12px; font-weight:600;">OR</span>
-                            <div style="flex:1; height:1px; background:var(--border-color);"></div>
-                        </div>
-
-                        <button id="guahh-login-btn" class="secondary"
-                            style="width:100%; display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:15px; background-color:#24292e; color:white; border:none;">
-                            <span class="material-symbols-rounded" style="font-size:20px;">login</span>
-                            Sign in with Guahh
-                        </button>
-                        <!-- End Guahh Integration -->
-                        <p>Don't have an account? <a id="show-register-link">Sign up</a></p>
-                    </div>
-                    <div id="register-form" class="hidden">
-                        <input type="text" id="register-username" placeholder="Username (no spaces)"
-                            autocomplete="username" maxlength="25">
-                        <input type="text" id="register-displayname" placeholder="Display Name" maxlength="30">
-                        <input type="password" id="register-password" placeholder="Password"
-                            autocomplete="new-password">
-                        <input type="password" id="register-password-confirm" placeholder="Confirm Password"
-                            autocomplete="new-password">
-                        <p
-                            style="font-size: 13px; color: var(--secondary-text-color); margin-top: -8px; margin-bottom: 12px; text-align: left;">
-                            Use a new and unique password for Kangaroo</p>
-                        <label class="form-group-tos">
-                            <input type="checkbox" id="register-tos">
-                            <span class="tos-checkmark"></span>
-                            <span class="tos-text">I agree to the <a href="https://guahhinc.github.io/guahh/#terms"
-                                    target="_blank" rel="noopener noreferrer">Terms of Service and Privacy
-                                    Policy</a>.</span>
-                        </label>
-                        <button id="register-btn" class="primary" disabled>Sign Up</button>
-                        <p id="register-error" class="error-message hidden"></p>
-                        <p>Have an account? <a id="show-login-link">Log in</a></p>
-                    </div>
-                </div>
+                <button class="header-icon" id="settings-nav-btn"><span
+                        class="material-symbols-rounded">settings</span></button>
             </div>
-        </div>
+        </header>
+
+        <div id="global-banner" class="hidden"></div>
 
         <div id="suspended-view" class="view">
             <div class="container">
@@ -2563,7 +2594,7 @@
             </div>
         </div>
 
-        <div id="main-app-view" class="view">
+        <div id="main-app-view" class="view active">
             <div class="container">
                 <main>
                     <div class="feed-nav">
@@ -2617,7 +2648,8 @@
                             style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                             <h4 style="margin:0;">Poll Options</h4>
                             <button id="remove-poll-btn" class="secondary"
-                                style="padding:4px 8px; font-size:12px;">Remove Poll</button>
+                                style="padding:4px 8px; font-size:12px;">Remove
+                                Poll</button>
                         </div>
                         <input type="text" class="poll-option-input" placeholder="Option 1" maxlength="50">
                         <input type="text" class="poll-option-input" placeholder="Option 2" maxlength="50">
@@ -2652,7 +2684,8 @@
                     <div class="mail-tab" data-box="sent">Sent</div>
                 </div>
                 <div id="mail-list-container" class="mail-list-container">
-                    <p style="text-align:center; padding:20px; color:var(--secondary-text-color);">Loading mail...</p>
+                    <p style="text-align:center; padding:20px; color:var(--secondary-text-color);">
+                        Loading mail...</p>
                 </div>
             </div>
         </div>
@@ -2666,7 +2699,8 @@
 
                     <div class="settings-section" style="margin-top: 5px; padding-top: 0px;">
                         <h4 class="settings-section-title"
-                            style="font-size: 14px; margin-bottom: 10px; color: var(--secondary-text-color);">Switch
+                            style="font-size: 14px; margin-bottom: 10px; color: var(--secondary-text-color);">
+                            Switch
                             Accounts</h4>
                         <div id="account-switcher-list"></div>
                         <button id="add-account-btn" class="secondary" style="width: 100%; margin-top: 15px;">+ Add
@@ -2713,7 +2747,8 @@
                 </div>
                 <div class="settings-section">
                     <h4 class="settings-section-title">🚫 Blocked Users</h4>
-                    <p class="setting-description" style="padding: 0 0 10px 0;">You won't see posts, profiles, or
+                    <p class="setting-description" style="padding: 0 0 10px 0;">You won't see posts,
+                        profiles, or
                         notifications from people you block.</p>
                     <div id="blocked-users-list"></div>
                 </div>
@@ -2838,6 +2873,7 @@
             </div>
         </div>
     </div>
+    </div>
 
     <div id="notifications-modal" class="modal hidden">
         <div class="modal-content">
@@ -2860,7 +2896,8 @@
                 <button class="close-modal-btn"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div id="photo-library-container">
-                <p style="font-size: 14px; margin-bottom: 8px; color: var(--secondary-text-color);">Or choose from
+                <p style="font-size: 14px; margin-bottom: 8px; color: var(--secondary-text-color);">Or
+                    choose from
                     library:</p>
                 <div id="photo-library-grid">Loading...</div>
             </div>
@@ -3289,11 +3326,11 @@
             };
 
             const views = {
-                auth: document.getElementById('auth-view'), feed: document.getElementById('main-app-view'), profile: document.getElementById('profile-page-view'), editProfile: document.getElementById('edit-profile-view'), suspended: document.getElementById('suspended-view'), outage: document.getElementById('outage-view'), hashtagFeed: document.getElementById('hashtag-feed-view'), mail: document.getElementById('mail-view'), settings: document.getElementById('settings-view'), search: document.getElementById('search-view'), createPost: document.getElementById('create-post-view'), postDetail: document.getElementById('post-detail-view'), update: document.getElementById('update-view')
+                feed: document.getElementById('main-app-view'), profile: document.getElementById('profile-page-view'), editProfile: document.getElementById('edit-profile-view'), suspended: document.getElementById('suspended-view'), outage: document.getElementById('outage-view'), hashtagFeed: document.getElementById('hashtag-feed-view'), mail: document.getElementById('mail-view'), settings: document.getElementById('settings-view'), search: document.getElementById('search-view'), createPost: document.getElementById('create-post-view'), postDetail: document.getElementById('post-detail-view'), update: document.getElementById('update-view')
             };
 
             const modals = {
-                notifications: document.getElementById('notifications-modal'), imageUrl: document.getElementById('image-url-modal'), videoUrl: document.getElementById('video-url-modal'), codeEmbed: document.getElementById('code-embed-modal'), report: document.getElementById('report-modal'), profileShortcut: document.getElementById('profile-shortcut-modal'), badgeDetail: document.getElementById('badge-detail-modal'), ban: document.getElementById('ban-modal'), composeMail: document.getElementById('compose-mail-modal'), readMail: document.getElementById('read-mail-modal')
+                notifications: document.getElementById('notifications-modal'), imageUrl: document.getElementById('image-url-modal'), videoUrl: document.getElementById('video-url-modal'), codeEmbed: document.getElementById('code-embed-modal'), report: document.getElementById('report-modal'), profileShortcut: document.getElementById('profile-shortcut-modal'), badgeDetail: document.getElementById('badge-detail-modal'), ban: document.getElementById('ban-modal'), composeMail: document.getElementById('compose-mail-modal'), readMail: document.getElementById('read-mail-modal'), auth: document.getElementById('auth-modal')
             };
 
             // Force FILL 1 on Verified Check
@@ -3592,11 +3629,10 @@
                 promptCommentImage(postId) { state.pendingCommentImagePostId = postId; ui.toggleModal('imageUrl', true); },
                 removeCommentImage(postId) { delete state.pendingCommentImages[postId]; ui.render(); },
                 clearAllNotifications() { const ids = state.notifications.map(n => n.notificationId); ids.forEach(id => state.deletedNotificationIds.add(id)); localStorage.setItem('notificationBlacklist', JSON.stringify(Array.from(state.deletedNotificationIds))); state.notifications = []; ui.renderNotifications(); state.unreadNotificationCount = 0; core.updateNotificationDot(); ids.forEach(id => api.call('deleteNotification', { userId: state.currentUser.userId, notificationId: id })); },
-                async login() { ui.hideError('login-error'); const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; if (!username || !password) return ui.showError('login-error', 'All fields required.'); ui.setButtonState('login-btn', 'Logging In...', true); try { const { user } = await api.call('login', { username, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); core.saveUserSession(user); await core.initializeApp(); } catch (e) { if (e.message === 'ACCOUNT_BANNED') { ui.renderBanPage(e.banDetails); core.navigateTo('suspended'); } else if (e.message === 'SERVER_OUTAGE') { core.logout(false); core.navigateTo('outage'); } else { ui.showError('login-error', e.message); } } finally { ui.setButtonState('login-btn', 'Log In', false); } },
-                async register() { ui.hideError('register-error'); const [username, displayName, password, confirmPassword] = [document.getElementById('register-username').value.trim(), document.getElementById('register-displayname').value.trim(), document.getElementById('register-password').value.trim(), document.getElementById('register-password-confirm').value.trim()]; const tosChecked = document.getElementById('register-tos').checked; if (!tosChecked) return ui.showError('register-error', 'You must agree to the Terms of Service.'); if (!username || !displayName || !password || !confirmPassword) return ui.showError('register-error', 'All fields required.'); if (password !== confirmPassword) return ui.showError('register-error', 'Passwords do not match.'); if (password.length < 4) return ui.showError('register-error', 'Password must be at least 4 characters long.'); if (username.length > 25) return ui.showError('register-error', 'Username cannot be longer than 25 characters.'); if (displayName.length > 30) return ui.showError('register-error', 'Display Name cannot be longer than 30 characters.'); const usernameRegex = /^[a-zA-Z0-9_.]+$/; if (!usernameRegex.test(username)) { return ui.showError('register-error', 'Username can only contain letters, numbers, dots, and underscores.'); } ui.setButtonState('register-btn', 'Signing Up...', true); try { const { user } = await api.call('register', { username, displayName, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); core.saveUserSession(user); await core.initializeApp(); } catch (e) { ui.showError('register-error', e.message); } finally { ui.setButtonState('register-btn', 'Sign Up', false); } },
-
+                async login() { ui.hideError('login-error'); const [username, password] = [document.getElementById('login-username').value.trim(), document.getElementById('login-password').value.trim()]; if (!username || !password) return ui.showError('login-error', 'All fields required.'); ui.setButtonState('login-btn', 'Logging In...', true); try { const { user } = await api.call('login', { username, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); core.saveUserSession(user); await core.initializeApp(); ui.toggleModal('auth', false); } catch (e) { if (e.message === 'ACCOUNT_BANNED') { ui.toggleModal('auth', false); ui.renderBanPage(e.banDetails); core.navigateTo('suspended'); } else if (e.message === 'SERVER_OUTAGE') { core.logout(false); core.navigateTo('outage'); } else { ui.showError('login-error', e.message); } } finally { ui.setButtonState('login-btn', 'Log In', false); } },
+                async register() { ui.hideError('register-error'); const [username, displayName, password, confirmPassword] = [document.getElementById('register-username').value.trim(), document.getElementById('register-displayname').value.trim(), document.getElementById('register-password').value.trim(), document.getElementById('register-password-confirm').value.trim()]; const tosChecked = document.getElementById('register-tos').checked; if (!tosChecked) return ui.showError('register-error', 'You must agree to the Terms of Service.'); if (!username || !displayName || !password || !confirmPassword) return ui.showError('register-error', 'All fields required.'); if (password !== confirmPassword) return ui.showError('register-error', 'Passwords do not match.'); if (password.length < 4) return ui.showError('register-error', 'Password must be at least 4 characters long.'); if (username.length > 25) return ui.showError('register-error', 'Username cannot be longer than 25 characters.'); if (displayName.length > 30) return ui.showError('register-error', 'Display Name cannot be longer than 30 characters.'); const usernameRegex = /^[a-zA-Z0-9_.]+$/; if (!usernameRegex.test(username)) { return ui.showError('register-error', 'Username can only contain letters, numbers, dots, and underscores.'); } ui.setButtonState('register-btn', 'Signing Up...', true); try { const { user } = await api.call('register', { username, displayName, password }); state.currentUser = user; localStorage.setItem('currentUser', JSON.stringify(user)); core.saveUserSession(user); await core.initializeApp(); ui.toggleModal('auth', false); } catch (e) { ui.showError('register-error', e.message); } finally { ui.setButtonState('register-btn', 'Sign Up', false); } },
                 async createPost() {
-                    if (!state.currentUser) { alert("Please log in to post."); core.navigateTo('auth'); return; }
+                    if (!state.currentUser) { ui.toggleModal('auth', true); return; }
                     const contentInput = document.getElementById('post-content-input');
                     let postContent = sanitizeHTML(contentInput.value.trim());
                     const imageUrl = state.postImageUrl;
@@ -3672,9 +3708,9 @@
                     }, 100);
                 },
 
-                async addComment(postId, commentText) { if (!state.currentUser) { alert('Please log in to comment.'); core.navigateTo('auth'); return; } if (!commentText.trim() && !state.pendingCommentImages[postId]) return; let finalCommentText = sanitizeHTML(commentText.trim()); if (state.pendingCommentImages[postId]) { finalCommentText += `<br><img src="${sanitizeHTML(state.pendingCommentImages[postId])}" alt="comment image">`; } const tempComment = { commentId: `temp_${Date.now()}`, userId: state.currentUser.userId, displayName: state.currentUser.displayName, isVerified: state.currentUser.isVerified, profilePictureUrl: state.currentUser.profilePictureUrl, commentText: finalCommentText, timestamp: new Date().toISOString() }; const postIndex = state.posts.findIndex(p => p.postId === postId); if (postIndex > -1) { state.posts[postIndex].comments.push(tempComment); delete state.pendingCommentImages[postId]; delete state.pendingCommentDrafts[postId]; ui.render(); } try { await api.call('addComment', { postId, userId: state.currentUser.userId, commentText: finalCommentText }); await core.refreshFeed(false); } catch (e) { alert(`Error: ${e.message}`); const pIndex = state.posts.findIndex(p => p.postId === postId); if (pIndex > -1) { state.posts[pIndex].comments = state.posts[pIndex].comments.filter(c => c.commentId !== tempComment.commentId); ui.render(); } } },
+                async addComment(postId, commentText) { if (!state.currentUser) { ui.toggleModal('auth', true); return; } if (!commentText.trim() && !state.pendingCommentImages[postId]) return; let finalCommentText = sanitizeHTML(commentText.trim()); if (state.pendingCommentImages[postId]) { finalCommentText += `<br><img src="${sanitizeHTML(state.pendingCommentImages[postId])}" alt="comment image">`; } const tempComment = { commentId: `temp_${Date.now()}`, userId: state.currentUser.userId, displayName: state.currentUser.displayName, isVerified: state.currentUser.isVerified, profilePictureUrl: state.currentUser.profilePictureUrl, commentText: finalCommentText, timestamp: new Date().toISOString() }; const postIndex = state.posts.findIndex(p => p.postId === postId); if (postIndex > -1) { state.posts[postIndex].comments.push(tempComment); delete state.pendingCommentImages[postId]; delete state.pendingCommentDrafts[postId]; ui.render(); } try { await api.call('addComment', { postId, userId: state.currentUser.userId, commentText: finalCommentText }); await core.refreshFeed(false); } catch (e) { alert(`Error: ${e.message}`); const pIndex = state.posts.findIndex(p => p.postId === postId); if (pIndex > -1) { state.posts[pIndex].comments = state.posts[pIndex].comments.filter(c => c.commentId !== tempComment.commentId); ui.render(); } } },
                 async toggleLike(postId) {
-                    if (!state.currentUser) { alert('Please log in to like posts.'); core.navigateTo('auth'); return; }
+                    if (!state.currentUser) { ui.toggleModal('auth', true); return; }
                     const post = state.posts.find(p => p.postId === postId); if (!post) return;
                     const isLiked = post.likes.some(l => l.userId === state.currentUser.userId); const newStatus = !isLiked;
                     const overrideData = { status: newStatus, timestamp: Date.now() }; state.pendingOverrides.likes[postId] = overrideData;
@@ -3821,7 +3857,14 @@
                     document.getElementById('logo-btn').addEventListener('click', () => core.navigateTo('feed'));
                     document.getElementById('home-btn').addEventListener('click', () => core.navigateTo('feed'));
                     document.getElementById('doomscroll-btn').addEventListener('click', () => { core.navigateTo('feed'); setTimeout(() => lightbox.open(null), 50); });
-                    document.getElementById('profile-nav-btn').addEventListener('click', (e) => { const isMobile = window.innerWidth <= 1023; if (isMobile) { e.preventDefault(); e.stopPropagation(); ui.renderProfileShortcutModal(); const btn = e.currentTarget; const rect = btn.getBoundingClientRect(); const bottomPos = (window.innerHeight - rect.top) + 10; const rightPos = (window.innerWidth - rect.right); const position = { bottom: bottomPos, right: rightPos < 10 ? 10 : rightPos }; ui.toggleModal('profileShortcut', true, position); } else { handlers.showProfile(state.currentUser.userId); } });
+                    document.getElementById('profile-nav-btn').addEventListener('click', (e) => {
+                        if (!state.currentUser) {
+                            ui.toggleModal('auth', true);
+                            return;
+                        }
+                        const isMobile = window.innerWidth <= 1023;
+                        if (isMobile) { e.preventDefault(); e.stopPropagation(); ui.renderProfileShortcutModal(); const btn = e.currentTarget; const rect = btn.getBoundingClientRect(); const bottomPos = (window.innerHeight - rect.top) + 10; const rightPos = (window.innerWidth - rect.right); const position = { bottom: bottomPos, right: rightPos < 10 ? 10 : rightPos }; ui.toggleModal('profileShortcut', true, position); } else { handlers.showProfile(state.currentUser.userId); }
+                    });
                     document.getElementById('clear-notifications-btn').addEventListener('click', handlers.clearAllNotifications);
                     document.getElementById('settings-nav-btn').addEventListener('click', () => core.navigateTo('settings'));
                     document.getElementById('search-btn').addEventListener('click', () => core.navigateTo('search'));
