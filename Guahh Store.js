@@ -28,7 +28,7 @@ function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ?
     }
 
     // Self update check
-    var svObj = getJSON(H + "/service/manual/guahhinc/firetestground/main/storever.js?t=" + now());
+    var svObj = getJSON("https://raw.githubusercontent.com/guahhinc/firetestground/main/storever.js?v=" + now());
     if (svObj && svObj.version && svObj.version !== SV) {
        k("Update Found", "v" + svObj.version, true);
        var selfURL = H + "/service/manual/guahhinc/firetestground/main/Guahh%20Store.js";
