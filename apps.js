@@ -4,7 +4,7 @@
       {
         "name": "IR",
         "slug": "ir",
-        "count": 2,
+        "count": 3,
         "apps": [
           {
             "n": "Epson EB-695Wi IR Codes",
