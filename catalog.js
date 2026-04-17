@@ -10,7 +10,7 @@
           "n": "Epson EB-695Wi IR Codes",
           "d": "Epson projector IR file",
           "s": "guahhinc/firetestground/Epson_EB-695Wi.ir",
-          "v": "1.1",
+          "v": "1.2",
           "slug": "epson-eb-695wi-ir",
           "owner": "guahhinc",
           "repo": "firetestground",
