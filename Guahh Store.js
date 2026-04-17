@@ -1,7 +1,7 @@
 function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ? "sd" : "littlefs" } catch (_c0) { Ce = "littlefs" } } function t() { ye = now() + 3e3 } function r() { ye > 0 && now() >= ye && "" != ve && (ve = "", "categories" === le ? xe = !0 : "scripts" === le && (Ee = !0)) } function s() { var e, t, r; ve || de || "scripts" !== le || 0 === re.apps.length || pe || fe || now() - Te <= 200 || (Te = now(), (e = re.apps[oe]).d.length > Ge && (me = ++me > e.d.length + 10 ? 0 : me, n(e)), t = 6 * (2 + Ne), r = Math.floor(Se / t), e.n.length > r && (we = ++we > e.n.length + 10 ? 0 : we, a(e))) } function n(e) { var t, r, s = Pe / 10 * 5 + 3 * (Ne + 1) + 3; W.drawFillRect(0, s - 10, Se, 20, _.black), c(1, _.white), t = e.d + "    ", r = me % t.length, W.drawText((t + t).substring(r, r + Ge), Se / 2, s) } function a(e) { var t, r, s, n, a = Pe / 10 * 4; W.drawFillRect(0, a - 15, Se, 30, _.black), c(2, _.green), t = 6 * (2 + Ne), r = Math.floor(Se / t), s = e.n + "    ", n = we % s.length, W.drawText((s + s).substring(n, n + r), Se / 2, a) } function o() { me = 0, we = 0 } function i(e) { var t = ne[e.s]; return t && t.version ? t.version : null } function c(e, t, r) { W.setTextSize(e + Ne), W.setTextColor(t), W.setTextAlign(r || "center", "middle") } function l(e, t, r, s) { var p = "Themes" === r && s ? s : ("IR" === r || "Ir" === r || "ir" === r ? "" : r); return t + (p ? p + "/" : "") + (e && "object" == typeof e && e.destination ? e.destination : e).replace(/^\/+/, "") } function g(e, t) { if ("UNKNOWN" !== e.v) { var r = i(e) || "None"; F("Available: " + e.v, 1, "C", "G" + t, _.grey), "None" !== r && F("Installed: " + r, 1, "C", "G" + (t + 1), _.grey) } } function u() { return !!V.connected() || (N("WiFi not connected"), !1) } function p(e, t, r, s) { var n, a, o, i = Math.floor(Se / (6 + Ne)); e.length > i ? (a = s % (n = e + "    ").length, o = (n.substring(a) + n.substring(0, a)).substring(0, i), W.setTextAlign("left", "middle"), W.drawText(o, 0, r)) : (W.setTextAlign("center", "middle"), W.drawText(e, t, r)) } function h(e, t, r, s) { var n, a; return !(e.sd && !r && (n = !1, "string" == typeof (a = e.sd) ? n = new RegExp(a).test(t) : a.length > 0 && (n = a.some(function (e) { return new RegExp(e).test(t) })), !n) || r && e.sss && e.sss !== s) } function f(e) { var t, r, s; de = !0, ce = 0, s = (r = !!(t = i(e))) && t !== e.v, (be = r ? s ? ["Update", "Reinstall", "Delete"] : ["Reinstall", "Delete"] : ["Install"]).push("Back"), Ae = !0 } function d() { de = !1, Ee = !0 } function v(e) { var t = be[ce]; d(), -1 !== ["Install", "Reinstall", "Update"].indexOf(t) ? O(e) : "Delete" === t && w(e) } function y(e) { N(e), t() } function m(e, t, r) { k(e, t, r) } function w(e) { var t, r, s, n, a, o, i; m(e.n, "Deleting", !0); try { for (r = (t = x(e)).files || [], s = "Themes" === t.category ? Y : "IR" === t.category || "Ir" === t.category || "ir" === t.category ? _IR : X, n = !1, a = 0; a < r.length; a++)m(e.n, "Deleting file " + (a + 1) + " of " + r.length), o = l(r[a], s, t.category, e.n), K.remove({ fs: Ce, path: o }) && (n = !0); m(e.n, "Finalizing deletion"), n ? (i = "Themes" === t.category ? t.category + "/" + e.n : ("IR" === t.category || "Ir" === t.category || "ir" === t.category ? "" : t.category), i && 0 === K.readdir({ fs: Ce, path: s + i }).length && K.remove({ fs: Ce, path: s + i }), delete ne[e.s], A(), Ee = !0, m("", ""), U(), y("Deleted successfully!")) : y("Failed deleting") } catch (_c1) { y("Err: " + _c1.message) } gc() } function T() {
   he = !0;
   k("Launching", "Loading Store");
-  N("Checking for updates...");
+  N("Connecting to Server...");
   
   function getJSON(url) {
     try {
@@ -10,62 +10,77 @@ function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ?
         var b = "" + res.body; 
         var s = b.indexOf("{"), e = b.lastIndexOf("}");
         if (s >= 0 && e > s) return JSON.parse(b.substring(s, e + 1));
+      } else if (res) {
+        // Log status if not successful
+        // N("Fail: " + res.status); 
       }
     } catch (err) {}
     return null;
   }
 
   try {
-    var sURL = "https://raw.githubusercontent.com/guahhinc/firetestground/main/storever.js?v=" + now();
-    var svObj = getJSON(sURL);
+    // 1. Self Update Check (Multi-stage)
+    var uURL = "https://raw.githubusercontent.com/guahhinc/firetestground/main/storever.js";
+    var svObj = getJSON(uURL + "?v=" + now());
+    if (!svObj) svObj = getJSON(uURL); 
+    if (!svObj) svObj = getJSON(H + "/service/manual/guahhinc/firetestground/main/storever.js");
+
     if (svObj && svObj.version) {
        var rV = ("" + svObj.version).replace(/\s/g, "");
        var lV = SV.replace(/\s/g, "");
        if (rV !== lV) {
          k("Update Found", "v" + lV + " -> v" + rV, true);
-         var selfURL = "https://raw.githubusercontent.com/guahhinc/firetestground/main/Guahh%20Store.js?v=" + now();
-         var selfPath = X + "Guahh Store.js";
-         var uR = V.httpFetch(selfURL, { save: { fs: Ce, path: selfPath, mode: "write" } });
+         var sURL = "https://raw.githubusercontent.com/guahhinc/firetestground/main/Guahh%20Store.js?v=" + now();
+         var sPath = X + "Guahh Store.js";
+         N("Downloading Update...");
+         var uR = V.httpFetch(sURL, { save: { fs: Ce, path: sPath, mode: "write" } });
+         
+         // Fallback download via proxy if direct fails
+         if (!uR || 200 !== uR.status) {
+            N("Retry via Proxy...");
+            sURL = H + "/service/manual/guahhinc/firetestground/main/Guahh%20Store.js";
+            uR = V.httpFetch(sURL, { save: { fs: Ce, path: sPath, mode: "write" } });
+         }
+
          if (uR && 200 === uR.status) {
            N("Update Installed! v" + rV + "\nPress any key to exit.");
-           delay(500); 
+           delay(1000); 
            z.getSelPress(); z.getEscPress(); z.getNextPress(); z.getPrevPress();
            while(!z.getSelPress() && !z.getEscPress() && !z.getNextPress() && !z.getPrevPress()) { delay(50); }
            ue = !0; return; 
          } else {
-           N("Update failed: " + (uR ? uR.status : "No Resp"));
+           N("Update failed: " + (uR ? uR.status : "Error"));
            delay(2000);
          }
        }
     }
 
+    // Default Fallback
     te = {
       totalCategories: 1,
       categories: [{
-        name: "Offline", slug: "ir", count: 1,
-        apps: [{
-          n: "Epson", d: "Epson Projector",
-          s: "guahhinc/firetestground/Epson_EB-695Wi.ir", v: "1.0",
-          slug: "epson-eb-695wi-ir", owner: "guahhinc", repo: "firetestground",
-          commit: "main", path: "/", files: ["Epson_EB-695Wi.ir"], category: "IR"
-        }]
+        name: "Guahh-Catalog", slug: "ir", count: 1,
+        apps: [{ n: "Epson", s: "guahhinc/firetestground/Epson_EB-695Wi.ir", v: "1.0", slug: "epson-ir" }]
       }]
     };
 
-    var catURL = H + "/service/manual/guahhinc/firetestground/main/catalog.js?v=" + now();
-    var catalog = getJSON(catURL);
+    // 2. Fetch Catalog (Multi-stage)
+    var cURL = "https://raw.githubusercontent.com/guahhinc/firetestground/main/catalog.js";
+    var catalog = getJSON(cURL + "?v=" + now());
+    if (!catalog) catalog = getJSON(cURL);
     if (!catalog) catalog = getJSON(H + "/service/manual/guahhinc/firetestground/main/catalog.js");
+
     if (catalog && catalog.categories) {
       te = catalog;
-      N("Store Loaded!");
+      N("Store Ready | " + te.totalCategories + " Categories");
     } else {
-      N("Using Offline Catalog");
+      N("Using Offline Mode");
     }
 
     le = "categories";
     j();
   } catch (_c2) {
-    N("Crash: " + _c2.message);
+    N("Boot Error: " + _c2.message);
   }
   
   delay(1000);
