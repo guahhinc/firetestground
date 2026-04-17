@@ -16,26 +16,27 @@ function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ?
   }
 
   try {
-    // 1. Self Update Check
+    // 1. Self Update Check (Using direct GitHub to avoid proxy cache)
     var svObj = getJSON("https://raw.githubusercontent.com/guahhinc/firetestground/main/storever.js?v=" + now());
-    if (svObj && svObj.version && svObj.version !== SV) {
-       k("Update Found", "Installing v" + svObj.version, true);
-       var selfURL = H + "/service/manual/guahhinc/firetestground/main/Guahh%20Store.js";
-       var selfPath = X + "Guahh Store.js";
-       var updateRes = V.httpFetch(selfURL, { save: { fs: Ce, path: selfPath, mode: "write" } });
-       if (updateRes && 200 === updateRes.status) {
-         N("Update Installed!\nPress any key to exit.");
-         // Flush keypresses then wait for any key
-         delay(500);
-         z.getSelPress(); z.getEscPress(); z.getNextPress(); z.getPrevPress();
-         while(!z.getSelPress() && !z.getEscPress() && !z.getNextPress() && !z.getPrevPress()) {
-            delay(50);
+    if (svObj && svObj.version) {
+       var remoteSV = "" + svObj.version;
+       if (remoteSV.trim() !== SV.trim()) {
+         k("Update Found", "Installing v" + remoteSV, true);
+         var selfURL = "https://raw.githubusercontent.com/guahhinc/firetestground/main/Guahh%20Store.js?v=" + now();
+         var selfPath = X + "Guahh Store.js";
+         var updateRes = V.httpFetch(selfURL, { save: { fs: Ce, path: selfPath, mode: "write" } });
+         if (updateRes && 200 === updateRes.status) {
+           N("Updated to " + remoteSV + "!\nPress any key to exit.");
+           delay(500);
+           z.getSelPress(); z.getEscPress(); z.getNextPress(); z.getPrevPress();
+           while(!z.getSelPress() && !z.getEscPress() && !z.getNextPress() && !z.getPrevPress()) {
+              delay(50);
+           }
+           ue = !0; return; 
+         } else {
+           N("Update failed: " + (updateRes ? updateRes.status : "No Resp"));
+           delay(2000);
          }
-         ue = !0; // Signal main loop to exit
-         return; 
-       } else {
-         N("Update failed: " + (updateRes ? updateRes.status : "No Resp"));
-         delay(2000);
        }
     }
 
@@ -53,7 +54,7 @@ function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ?
       }]
     };
 
-    // 2. Fetch Catalog
+    // 2. Fetch Catalog (apps/catalog.js)
     var catalog = getJSON(H + "/service/manual/guahhinc/firetestground/main/catalog.js?v=" + now());
     if (!catalog) catalog = getJSON(H + "/service/manual/guahhinc/firetestground/main/catalog.js");
     if (catalog && catalog.categories) {
