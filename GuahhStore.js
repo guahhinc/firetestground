@@ -1,4 +1,4 @@
-var J, L, M, q = require("device"), W = require("display"), z = require("keyboard"), K = require("storage"), V = require("wifi"), _ = { black: W.color(0, 0, 0), grey: W.color(127, 127, 127), white: W.color(255, 255, 255), green: W.color(0, 255, 0), yellow: W.color(255, 255, 0), orange: W.color(255, 165, 0), red: W.color(255, 0, 0), cyan: W.color(0, 255, 255) }, H = "http://ghp.iceis.co.uk", Q = H + "/service/main/releases/categories.json", X = "/BruceJS/", Y = "/Themes/", _IR = "/BruceIR/", _ST = "/App Stores/", Z = "/GuahhStore/installed.json", $ = "/GuahhStore/cache/", ee = "/GuahhStore/lastUpdated.json", SV = "/GuahhStore/storever.js", te = {}, re = [], se = {}, ne = {}, ae = [], oe = 0, ie = 0, ce = 0, le = "categories", ge = null, ue = !1, pe = !1, he = !1, fe = !1, de = !1, ve = "", ye = 0, me = 0, we = 0, Te = 0, be = [], Ce = "littlefs", xe = !1, Ee = !1, Ae = !1, Se = W.width(), Pe = W.height(), Ne = Se > 300 ? 1 : 0, Ge = Math.trunc(Se / (6 * (Ne + 1))), Re = 8 * (1 + Ne), Ue = 8 * (2 + Ne);
+var J, L, M, q = require("device"), W = require("display"), z = require("keyboard"), K = require("storage"), V = require("wifi"), _ = { black: W.color(0, 0, 0), grey: W.color(127, 127, 127), white: W.color(255, 255, 255), green: W.color(0, 255, 0), yellow: W.color(255, 255, 0), orange: W.color(255, 165, 0), red: W.color(255, 0, 0), cyan: W.color(0, 255, 255) }, H = "http://raw.githack.com", Q = H + "/service/main/releases/categories.json", X = "/BruceJS/", Y = "/Themes/", _IR = "/BruceIR/", _ST = "/App Stores/", Z = "/GuahhStore/installed.json", $ = "/GuahhStore/cache/", ee = "/GuahhStore/lastUpdated.json", SV = "/GuahhStore/storever.js", te = {}, re = [], se = {}, ne = {}, ae = [], oe = 0, ie = 0, ce = 0, le = "categories", ge = null, ue = !1, pe = !1, he = !1, fe = !1, de = !1, ve = "", ye = 0, me = 0, we = 0, Te = 0, be = [], Ce = "littlefs", xe = !1, Ee = !1, Ae = !1, Se = W.width(), Pe = W.height(), Ne = Se > 300 ? 1 : 0, Ge = Math.trunc(Se / (6 * (Ne + 1))), Re = 8 * (1 + Ne), Ue = 8 * (2 + Ne);
 
 function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ? "sd" : "littlefs" } catch (_c0) { Ce = "littlefs" } } 
 function t() { ye = now() + 3e3 } 
@@ -60,7 +60,7 @@ function T() {
   }
   
   try {
-    var catalogUrl = "https://raw.githubusercontent.com/guahhinc/firetestground/main/catalog.js?v=" + now();
+    var catalogUrl = H + "/guahhinc/firetestground/main/catalog.js?v=" + now();
     var catalog = getJSON(catalogUrl);
     if (catalog && catalog.categories) {
       te = catalog;
@@ -191,7 +191,7 @@ function O(e) {
     for (r = 0, s = 0, a = (n = x(e)).files || [], o = "Themes" === n.category ? Y : "IR" === n.category || "Ir" === n.category || "ir" === n.category ? _IR : "Stores" === n.category ? _ST : X, i = 0; i < a.length; i++) {
       g = l(c = a[i], o, n.category, e.n); 
       p = c && "object" == typeof c && c.source ? (n.path + c.source).replace(/^\/+/, "") : (n.path + c).replace(/^\/+/, ""); 
-      h = (H + "/service/manual/" + n.owner + "/" + n.repo + "/" + n.commit + "/" + p).replace(/ /g, "%20"); 
+      h = (H + "/" + n.owner + "/" + n.repo + "/" + n.commit + "/" + p).replace(/ /g, "%20"); 
       if (200 === V.httpFetch(h, { save: { fs: Ce, path: g, mode: "write" } }).status) {
         k(e.n, "Downloading " + (i + 1) + " of " + a.length); 
         r++;
