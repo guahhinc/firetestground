@@ -81,17 +81,17 @@
         "count": 1,
         "apps": [
           {
-            "n": "Guahh Store",
+            "n": "GuahhStore",
             "d": "Guahh Store App",
-            "s": "GuahhDevices/Guahh-Store/Guahh Store",
-            "v": "1.0",
+            "s": "guahhinc/firetestground/GuahhStore.js",
+            "v": "1.0.3",
             "slug": "guahh-store",
             "owner": "guahhinc",
             "repo": "firetestground",
             "commit": "main",
             "path": "/",
             "files": [
-              "Guahh Store.js"
+              "GuahhStore.js"
             ],
             "category": "Stores"
           }

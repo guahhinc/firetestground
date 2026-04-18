@@ -88,10 +88,10 @@ function T() {
 
     if (te && te.categories) {
       var storeApp = {
-        n: "Guahh Store", d: "Guahh Store App",
-        s: "GuahhDevices/Guahh-Store/Guahh Store", v: "1.0",
+        n: "GuahhStore", d: "Guahh Store App",
+        s: "guahhinc/firetestground/GuahhStore.js", v: "1.0.3",
         slug: "guahh-store", owner: "guahhinc", repo: "firetestground",
-        commit: "main", path: "/", files: ["Guahh Store.js"], category: "Stores"
+        commit: "main", path: "/", files: ["GuahhStore.js"], category: "Stores"
       };
       var storeCat = null;
       for (var i = 0; i < te.categories.length; i++) {
@@ -103,7 +103,7 @@ function T() {
       if (storeCat) {
         var found = false;
         for (var idx = 0; idx < storeCat.apps.length; idx++) {
-          if (storeCat.apps[idx].n === "Guahh Store") { found = true; break; }
+          if (storeCat.apps[idx].n === "GuahhStore" || storeCat.apps[idx].n === "Guahh Store") { found = true; break; }
         }
         if (!found) {
           storeCat.apps.push(storeApp);
@@ -147,7 +147,7 @@ function E() {
     ne = {} 
   } 
   
-  var sv = "1.0.2"; // Fallback to current known version
+  var sv = "1.0.3"; // Fallback to current known version
   var svPaths = [SV, "/storever.js", "/BruceJS/storever.js"];
   for (var i = 0; i < svPaths.length; i++) {
     try {
@@ -159,7 +159,7 @@ function E() {
     } catch(err) {}
   }
 
-  var storeKey = "GuahhDevices/Guahh-Store/Guahh Store";
+  var storeKey = "guahhinc/firetestground/GuahhStore.js";
   if (!ne[storeKey] || ne[storeKey].version === "0.0.0" || ne[storeKey].version !== sv) {
     ne[storeKey] = { version: sv, commit: "" }; 
     A();
@@ -268,30 +268,40 @@ J = !1;
 L = ""; 
 M = ""; 
 
+var escHoldCount = 0;
 while (!ue) { 
+  var simulatePrev = false;
   if (z.getEscPress()) {
-    if (de) d(); 
-    else { 
-      if ("scripts" !== le) { ue = !0; break } 
-      B(); 
+    escHoldCount++;
+    if (escHoldCount === 14) {
+      if (de) d(); 
+      else { 
+        if ("scripts" !== le) { ue = !0; break; } 
+        B(); 
+      }
     }
+  } else {
+    if (escHoldCount > 0 && escHoldCount < 14) simulatePrev = true;
+    escHoldCount = 0;
   }
+
   if (!fe) { 
-    if ("" != ve && (z.getNextPress() || z.getPrevPress() || z.getSelPress() || z.getEscPress())) {
+    if ("" != ve && (z.getNextPress() || z.getPrevPress() || z.getSelPress() || escHoldCount === 1)) {
+      if (escHoldCount === 1) escHoldCount = 100;
       ve = ""; 
       ye = 0; 
       "categories" === le ? xe = !0 : Ee = !0;
     } else if (de) { 
       if (z.getNextPress()) { ce = (ce + 1) % be.length, Ae = !0 } 
-      else if (z.getPrevPress()) { ce = (ce - 1 + be.length) % be.length, Ae = !0 } 
+      else if (z.getPrevPress() || simulatePrev) { ce = (ce - 1 + be.length) % be.length, Ae = !0 } 
       if (z.getSelPress()) v(re.apps[oe]);
     } else if ("categories" === le) { 
       if (z.getNextPress()) I(!0, te.totalCategories); 
-      else if (z.getPrevPress()) I(!1, te.totalCategories); 
+      else if (z.getPrevPress() || simulatePrev) I(!1, te.totalCategories); 
       else if (z.getSelPress() && te.totalCategories > 0) D(te.categories[oe]);
     } else { 
       if (z.getNextPress()) I(!0, re.apps.length, o); 
-      else if (z.getPrevPress()) I(!1, re.apps.length, o); 
+      else if (z.getPrevPress() || simulatePrev) I(!1, re.apps.length, o); 
       else if (z.getSelPress() && re.apps.length > 0) f(re.apps[oe]);
     }
     R(); 
