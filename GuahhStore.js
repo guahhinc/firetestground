@@ -60,30 +60,12 @@ function T() {
   }
   
   try {
-    te = {
-      totalCategories: 1,
-      categories: [{
-        name: "Offline-IR", slug: "ir", count: 1,
-        apps: [{
-          n: "Epson EB-695Wi IR Codes", d: "Epson projector IR file",
-          s: "guahhinc/firetestground/Epson_EB-695Wi.ir", v: "1.0",
-          slug: "epson-eb-695wi-ir", owner: "guahhinc", repo: "firetestground",
-          commit: "main", path: "/", files: ["Epson_EB-695Wi.ir"], category: "IR"
-        }]
-      }]
-    };
-
-    var catalogUrl = H + "/service/manual/guahhinc/firetestground/main/catalog.js?v=" + now();
+    var catalogUrl = "https://raw.githubusercontent.com/guahhinc/firetestground/main/catalog.js?v=" + now();
     var catalog = getJSON(catalogUrl);
     if (catalog && catalog.categories) {
       te = catalog;
-
-
-
-
-
     } else {
-      N("Catalog Error\nCheck Proxy/WiFi");
+      N("Catalog Error\nCheck WiFi");
     }
 
     if (te && te.categories) {
@@ -269,40 +251,30 @@ J = !1;
 L = ""; 
 M = ""; 
 
-var escHoldCount = 0;
 while (!ue) { 
-  var simulatePrev = false;
   if (z.getEscPress()) {
-    escHoldCount++;
-    if (escHoldCount === 14) {
-      if (de) d(); 
-      else { 
-        if ("scripts" !== le) { ue = !0; break; } 
-        B(); 
-      }
+    if (de) d(); 
+    else { 
+      if ("scripts" !== le) { ue = !0; break } 
+      B(); 
     }
-  } else {
-    if (escHoldCount > 0 && escHoldCount < 14) simulatePrev = true;
-    escHoldCount = 0;
   }
-
   if (!fe) { 
-    if ("" != ve && (z.getNextPress() || z.getPrevPress() || z.getSelPress() || escHoldCount === 1)) {
-      if (escHoldCount === 1) escHoldCount = 100;
+    if ("" != ve && (z.getNextPress() || z.getPrevPress() || z.getSelPress() || z.getEscPress())) {
       ve = ""; 
       ye = 0; 
       "categories" === le ? xe = !0 : Ee = !0;
     } else if (de) { 
       if (z.getNextPress()) { ce = (ce + 1) % be.length, Ae = !0 } 
-      else if (z.getPrevPress() || simulatePrev) { ce = (ce - 1 + be.length) % be.length, Ae = !0 } 
+      else if (z.getPrevPress()) { ce = (ce - 1 + be.length) % be.length, Ae = !0 } 
       if (z.getSelPress()) v(re.apps[oe]);
     } else if ("categories" === le) { 
       if (z.getNextPress()) I(!0, te.totalCategories); 
-      else if (z.getPrevPress() || simulatePrev) I(!1, te.totalCategories); 
+      else if (z.getPrevPress()) I(!1, te.totalCategories); 
       else if (z.getSelPress() && te.totalCategories > 0) D(te.categories[oe]);
     } else { 
       if (z.getNextPress()) I(!0, re.apps.length, o); 
-      else if (z.getPrevPress() || simulatePrev) I(!1, re.apps.length, o); 
+      else if (z.getPrevPress()) I(!1, re.apps.length, o); 
       else if (z.getSelPress() && re.apps.length > 0) f(re.apps[oe]);
     }
     R(); 
