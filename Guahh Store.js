@@ -270,4 +270,4 @@ while (!ue) {
   s(); 
   delay(50); 
 }
-try { delete require.cache[__filename]; } catch (e) {}
+try { delete require.cache[__filename]; } catch (_err) {}
