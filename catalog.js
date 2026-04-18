@@ -1,5 +1,5 @@
 {
-  "totalCategories": 2,
+  "totalCategories": 3,
     "categories": [
       {
         "name": "IR",
@@ -72,6 +72,28 @@
               "M5Calculator.js"
             ],
             "category": "Tools"
+          }
+        ]
+      },
+      {
+        "name": "Stores",
+        "slug": "stores",
+        "count": 1,
+        "apps": [
+          {
+            "n": "Guahh Store",
+            "d": "Guahh Store App",
+            "s": "GuahhDevices/Guahh-Store/Guahh Store",
+            "v": "1.0",
+            "slug": "guahh-store",
+            "owner": "guahhinc",
+            "repo": "firetestground",
+            "commit": "main",
+            "path": "/",
+            "files": [
+              "Guahh Store.js"
+            ],
+            "category": "Stores"
           }
         ]
       }
