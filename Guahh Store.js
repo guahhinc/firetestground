@@ -151,7 +151,7 @@ function U() { var e, t, r, s; if (gc(), Ee) { if (Ee = !1, W.drawFillRect(0, Ue
 
 function k(e, t, r) { 
   gc(), void 0 === e && (e = ""), void 0 === t && (t = ""), void 0 === r && (r = !1);
-  var pricolor = "#ADD8E6";
+  var pricolor = W.color(173, 216, 230);
   r && W.drawFillRect(0, Ue, Se, Pe, _.black);
   if (!de && !J) {
     W.drawFillRect(0, 0, Se, Ue, _.black);
@@ -270,3 +270,4 @@ while (!ue) {
   s(); 
   delay(50); 
 }
+try { delete require.cache[__filename]; } catch (e) {}
