@@ -86,6 +86,38 @@ function T() {
       N("Catalog Error\nCheck Proxy/WiFi");
     }
 
+    if (te && te.categories) {
+      var storeApp = {
+        n: "Guahh Store", d: "Guahh Store App",
+        s: "GuahhDevices/Guahh-Store/Guahh Store", v: "1.0",
+        slug: "guahh-store", owner: "guahhinc", repo: "firetestground",
+        commit: "main", path: "/", files: ["Guahh Store.js"], category: "Stores"
+      };
+      var storeCat = null;
+      for (var i = 0; i < te.categories.length; i++) {
+        if (te.categories[i].name === "Stores") {
+          storeCat = te.categories[i];
+          break;
+        }
+      }
+      if (storeCat) {
+        var found = false;
+        for (var idx = 0; idx < storeCat.apps.length; idx++) {
+          if (storeCat.apps[idx].n === "Guahh Store") { found = true; break; }
+        }
+        if (!found) {
+          storeCat.apps.push(storeApp);
+          storeCat.count = storeCat.apps.length;
+        }
+      } else {
+        te.categories.push({
+          name: "Stores", slug: "stores", count: 1,
+          apps: [storeApp]
+        });
+        te.totalCategories = te.categories.length;
+      }
+    }
+
     le = "categories";
     j();
   } catch (_c2) {
