@@ -84,7 +84,7 @@
             "n": "GuahhStore",
             "d": "Guahh Store App",
             "s": "guahhinc/firetestground/GuahhStore.js",
-            "v": "1.0.3",
+            "v": "1.0.4",
             "slug": "guahh-store",
             "owner": "guahhinc",
             "repo": "firetestground",
