@@ -1,4 +1,4 @@
-var J, L, M, q = require("device"), W = require("display"), z = require("keyboard"), K = require("storage"), V = require("wifi"), _ = { black: W.color(0, 0, 0), grey: W.color(127, 127, 127), white: W.color(255, 255, 255), green: W.color(0, 255, 0), yellow: W.color(255, 255, 0), orange: W.color(255, 165, 0), red: W.color(255, 0, 0), cyan: W.color(0, 255, 255) }, H = "http://ghp.iceis.co.uk", Q = H + "/service/main/releases/categories.json", X = "/BruceJS/", Y = "/Themes/", _IR = "/BruceIR/", Z = "/GuahhStore/installed.json", $ = "/GuahhStore/cache/", ee = "/GuahhStore/lastUpdated.json", SV = "/GuahhStore/storever.js", te = {}, re = [], se = {}, ne = {}, ae = [], oe = 0, ie = 0, ce = 0, le = "categories", ge = null, ue = !1, pe = !1, he = !1, fe = !1, de = !1, ve = "", ye = 0, me = 0, we = 0, Te = 0, be = [], Ce = "littlefs", xe = !1, Ee = !1, Ae = !1, Se = W.width(), Pe = W.height(), Ne = Se > 300 ? 1 : 0, Ge = Math.trunc(Se / (6 * (Ne + 1))), Re = 8 * (1 + Ne), Ue = 8 * (2 + Ne);
+var J, L, M, q = require("device"), W = require("display"), z = require("keyboard"), K = require("storage"), V = require("wifi"), _ = { black: W.color(0, 0, 0), grey: W.color(127, 127, 127), white: W.color(255, 255, 255), green: W.color(0, 255, 0), yellow: W.color(255, 255, 0), orange: W.color(255, 165, 0), red: W.color(255, 0, 0), cyan: W.color(0, 255, 255) }, H = "http://ghp.iceis.co.uk", Q = H + "/service/main/releases/categories.json", X = "/BruceJS/", Y = "/Themes/", _IR = "/BruceIR/", _ST = "/App Stores/", Z = "/GuahhStore/installed.json", $ = "/GuahhStore/cache/", ee = "/GuahhStore/lastUpdated.json", SV = "/GuahhStore/storever.js", te = {}, re = [], se = {}, ne = {}, ae = [], oe = 0, ie = 0, ce = 0, le = "categories", ge = null, ue = !1, pe = !1, he = !1, fe = !1, de = !1, ve = "", ye = 0, me = 0, we = 0, Te = 0, be = [], Ce = "littlefs", xe = !1, Ee = !1, Ae = !1, Se = W.width(), Pe = W.height(), Ne = Se > 300 ? 1 : 0, Ge = Math.trunc(Se / (6 * (Ne + 1))), Re = 8 * (1 + Ne), Ue = 8 * (2 + Ne);
 
 function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ? "sd" : "littlefs" } catch (_c0) { Ce = "littlefs" } } 
 function t() { ye = now() + 3e3 } 
@@ -9,7 +9,7 @@ function a(e) { var t, r, s, n, a = Pe / 10 * 4; W.drawFillRect(0, a - 15, Se, 3
 function o() { me = 0, we = 0 } 
 function i(e) { var t = ne[e.s]; return t && t.version ? t.version : null } 
 function c(e, t, r) { W.setTextSize(e + Ne), W.setTextColor(t), W.setTextAlign(r || "center", "middle") } 
-function l(e, t, r, s) { var p = "Themes" === r && s ? s : ("IR" === r || "Ir" === r || "ir" === r ? "" : r); return t + (p ? p + "/" : "") + (e && "object" == typeof e && e.destination ? e.destination : e).replace(/^\/+/, "") } 
+function l(e, t, r, s) { var p = "Themes" === r && s ? s : ("IR" === r || "Ir" === r || "ir" === r || "Stores" === r ? "" : r); return t + (p ? p + "/" : "") + (e && "object" == typeof e && e.destination ? e.destination : e).replace(/^\/+/, "") } 
 function g(e, t) { if ("UNKNOWN" !== e.v) { var r = i(e) || "None"; F("Available: " + e.v, 1, "C", "G" + t, _.grey), "None" !== r && F("Installed: " + r, 1, "C", "G" + (t + 1), _.grey) } } 
 function u() { return !!V.connected() || (N("WiFi not connected"), !1) } 
 function p(e, t, r, s) { var n, a, o, i = Math.floor(Se / (6 + Ne)); e.length > i ? (a = s % (n = e + "    ").length, o = (n.substring(a) + n.substring(0, a)).substring(0, i), W.setTextAlign("left", "middle"), W.drawText(o, 0, r)) : (W.setTextAlign("center", "middle"), W.drawText(e, t, r)) } 
@@ -19,7 +19,7 @@ function d() { de = !1, Ee = !0 }
 function v(e) { var t = be[ce]; d(), -1 !== ["Install", "Reinstall", "Update"].indexOf(t) ? O(e) : "Delete" === t && w(e) } 
 function y(e) { N(e), t() } 
 function m(e, t, r) { k(e, t, r) } 
-function w(e) { var t, r, s, n, a, o, i; m(e.n, "Deleting", !0); try { for (r = (t = x(e)).files || [], s = "Themes" === t.category ? Y : "IR" === t.category || "Ir" === t.category || "ir" === t.category ? _IR : X, n = !1, a = 0; a < r.length; a++)m(e.n, "Deleting file " + (a + 1) + " of " + r.length), o = l(r[a], s, t.category, e.n), K.remove({ fs: Ce, path: o }) && (n = !0); m(e.n, "Finalizing deletion"), n ? (i = "Themes" === t.category ? t.category + "/" + e.n : ("IR" === t.category || "Ir" === t.category || "ir" === t.category ? "" : t.category), i && 0 === K.readdir({ fs: Ce, path: s + i }).length && K.remove({ fs: Ce, path: s + i }), delete ne[e.s], A(), Ee = !0, m("", ""), U(), y("Deleted successfully!")) : y("Failed deleting") } catch (_c1) { y("Err: " + _c1.message) } gc() } 
+function w(e) { var t, r, s, n, a, o, i; m(e.n, "Deleting", !0); try { for (r = (t = x(e)).files || [], s = "Themes" === t.category ? Y : "IR" === t.category || "Ir" === t.category || "ir" === t.category ? _IR : "Stores" === t.category ? _ST : X, n = !1, a = 0; a < r.length; a++)m(e.n, "Deleting file " + (a + 1) + " of " + r.length), o = l(r[a], s, t.category, e.n), K.remove({ fs: Ce, path: o }) && (n = !0); m(e.n, "Finalizing deletion"), n ? (i = "Themes" === t.category ? t.category + "/" + e.n : ("IR" === t.category || "Ir" === t.category || "ir" === t.category ? "" : "Stores" === t.category ? "" : t.category), i && 0 === K.readdir({ fs: Ce, path: s + i }).length && K.remove({ fs: Ce, path: s + i }), delete ne[e.s], A(), Ee = !0, m("", ""), U(), y("Deleted successfully!")) : y("Failed deleting") } catch (_c1) { y("Err: " + _c1.message) } gc() } 
 
 function getJSON(url) {
   try {
@@ -205,7 +205,8 @@ function O(e) {
   try { 
     if (!u()) return void (fe = !1); 
     k(e.n, "Installing"); 
-    for (r = 0, s = 0, a = (n = x(e)).files || [], o = "Themes" === n.category ? Y : "IR" === n.category || "Ir" === n.category || "ir" === n.category ? _IR : X, i = 0; i < a.length; i++) {
+    if ("Stores" === x(e).category) { try { K.remove({ fs: Ce, path: _ST + "Guahh Store.js" }); K.remove({ fs: Ce, path: _ST + "GuahhStore.js" }); } catch(err) {} }
+    for (r = 0, s = 0, a = (n = x(e)).files || [], o = "Themes" === n.category ? Y : "IR" === n.category || "Ir" === n.category || "ir" === n.category ? _IR : "Stores" === n.category ? _ST : X, i = 0; i < a.length; i++) {
       g = l(c = a[i], o, n.category, e.n); 
       p = c && "object" == typeof c && c.source ? (n.path + c.source).replace(/^\/+/, "") : (n.path + c).replace(/^\/+/, ""); 
       h = (H + "/service/manual/" + n.owner + "/" + n.repo + "/" + n.commit + "/" + p).replace(/ /g, "%20"); 
