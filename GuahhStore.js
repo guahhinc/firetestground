@@ -1,4 +1,4 @@
-var J, L, M, q = require("device"), W = require("display"), z = require("keyboard"), K = require("storage"), V = require("wifi"), _ = { black: W.color(0, 0, 0), grey: W.color(127, 127, 127), white: W.color(255, 255, 255), green: W.color(0, 255, 0), yellow: W.color(255, 255, 0), orange: W.color(255, 165, 0), red: W.color(255, 0, 0), cyan: W.color(0, 255, 255) }, H = "http://raw.githack.com", X = "/BruceJS/", Y = "/Themes/", _IR = "/BruceIR/", _ST = "/App Stores/", Z = "/GuahhStore/installed.json", $ = "/GuahhStore/cache/", ee = "/GuahhStore/lastUpdated.json", SV = "/GuahhStore/storever.js", te = {}, re = [], se = {}, ne = {}, ae = [], oe = 0, ie = 0, ce = 0, le = "categories", ge = null, ue = !1, pe = !1, he = !1, fe = !1, de = !1, ve = "", ye = 0, me = 0, we = 0, Te = 0, be = [], Ce = "littlefs", xe = !1, Ee = !1, Ae = !1, Se = W.width(), Pe = W.height(), Ne = Se > 300 ? 1 : 0, Ge = Math.trunc(Se / (6 * (Ne + 1))), Re = 8 * (1 + Ne), Ue = 8 * (2 + Ne);
+var J, L, M, q = require("device"), W = require("display"), z = require("keyboard"), K = require("storage"), V = require("wifi"), _ = { black: W.color(0, 0, 0), grey: W.color(127, 127, 127), white: W.color(255, 255, 255), green: W.color(0, 255, 0), yellow: W.color(255, 255, 0), orange: W.color(255, 165, 0), red: W.color(255, 0, 0), cyan: W.color(0, 255, 255) }, H = "http://raw.gitmirror.com", X = "/BruceJS/", Y = "/Themes/", _IR = "/BruceIR/", _ST = "/App Stores/", Z = "/GuahhStore/installed.json", $ = "/GuahhStore/cache/", ee = "/GuahhStore/lastUpdated.json", SV = "/GuahhStore/storever.js", te = {}, re = [], se = {}, ne = {}, ae = [], oe = 0, ie = 0, ce = 0, le = "categories", ge = null, ue = !1, pe = !1, he = !1, fe = !1, de = !1, ve = "", ye = 0, me = 0, we = 0, Te = 0, be = [], Ce = "littlefs", xe = !1, Ee = !1, Ae = !1, Se = W.width(), Pe = W.height(), Ne = Se > 300 ? 1 : 0, Ge = Math.trunc(Se / (6 * (Ne + 1))), Re = 8 * (1 + Ne), Ue = 8 * (2 + Ne);
 
 function e() { try { var e = K.read({ fs: "sd", path: "/bruce.conf" }); Ce = e ? "sd" : "littlefs" } catch (_c0) { Ce = "littlefs" } } 
 function t() { ye = now() + 3e3 } 
@@ -25,12 +25,16 @@ function getJSON(url) {
   try {
     k("Network", "Fetching data");
     var res = V.httpFetch(url, { method: "GET", responseType: "json" });
-    if (res && 200 === res.status && res.body) {
-      return res.body;
+    if (res && (200 === res.status || 0 === res.status) && res.body) {
+      if (typeof res.body === "object") return res.body;
+      var b = "" + res.body; 
+      var s = b.indexOf("{"), e = b.lastIndexOf("}");
+      if (s >= 0 && e > s) return JSON.parse(b.substring(s, e + 1));
+      return null;
     } else if (res) {
       N("HTTP Error: " + res.status);
     } else {
-      N("No Response from server");
+      N("No Response");
     }
   } catch (err) {
     N("Fetch Error: " + err.message);
@@ -39,72 +43,69 @@ function getJSON(url) {
 }
 
 function T() {
-  he = !0;
+  he = !1; // Ensure not already running
   k("Launching", "Loading Store");
+  try { K.mkdir({ fs: Ce, path: _ST }); } catch(_err) {}
   
-  // Wait for WiFi
   var retries = 0;
-  while (!V.connected() && retries < 30) {
-    N("Connecting WiFi (" + Math.ceil((30-retries)/2) + "s)");
-    delay(500);
+  while (!V.connected() && retries < 15) {
+    N("Connecting WiFi (" + Math.ceil((15-retries)) + "s)");
+    delay(1000);
     retries++;
   }
   
   if (!V.connected()) {
     N("WiFi not connected");
-    he = !1;
     return;
   }
   
   try {
     k("Launching", "Fetching catalog");
-    var catalogUrl = H + "/guahhinc/firetestground/main/catalog.js?v=" + now();
+    var cb = now() + "" + Math.floor(Math.random() * 1000);
+    var catalogUrl = H + "/guahhinc/firetestground/main/catalog.js?v=" + cb;
     var res = V.httpFetch(catalogUrl, { method: "GET", responseType: "json" });
-    if (res && 200 === res.status && res.body) {
-      te = res.body;
+    if (res && (200 === res.status || 0 === res.status) && res.body) {
+      if (typeof res.body === "object") te = res.body;
+      else {
+        var b = "" + res.body;
+        var s = b.indexOf("{"), e = b.lastIndexOf("}");
+        if (s >= 0 && e > s) te = JSON.parse(b.substring(s, e + 1));
+      }
     } else {
-      N("Catalog Error: " + (res ? res.status : "no response"));
+      N("Catalog Error: " + (res ? res.status : "timeout"));
     }
 
     if (te && te.categories) {
       var storeApp = {
         n: "GuahhStore", d: "Guahh Store App",
-        s: "guahhinc/firetestground/GuahhStore.js", v: "1.0.3",
+        s: "guahhinc/firetestground/GuahhStore.js", v: "1.0.5",
         slug: "guahh-store", owner: "guahhinc", repo: "firetestground",
         commit: "main", path: "/", files: ["GuahhStore.js"], category: "Stores"
       };
       var storeCat = null;
       for (var i = 0; i < te.categories.length; i++) {
-        if (te.categories[i].name === "Stores") {
-          storeCat = te.categories[i];
-          break;
-        }
+        if (te.categories[i].name === "Stores") { storeCat = te.categories[i]; break; }
       }
       if (storeCat) {
         var found = false;
         for (var idx = 0; idx < storeCat.apps.length; idx++) {
-          if (storeCat.apps[idx].n === "GuahhStore" || storeCat.apps[idx].n === "Guahh Store") { found = true; break; }
+          if (storeCat.apps[idx].n === "GuahhStore" || storeCat.apps[idx].n === "Guahh Store") {
+            storeCat.apps[idx].v = "1.0.5"; // Ensure injector has latest
+            found = true; break; 
+          }
         }
-        if (!found) {
-          storeCat.apps.push(storeApp);
-          storeCat.count = storeCat.apps.length;
-        }
+        if (!found) { storeCat.apps.push(storeApp); storeCat.count = storeCat.apps.length; }
       } else {
-        te.categories.push({
-          name: "Stores", slug: "stores", count: 1,
-          apps: [storeApp]
-        });
+        te.categories.push({ name: "Stores", slug: "stores", count: 1, apps: [storeApp] });
         te.totalCategories = te.categories.length;
       }
     }
 
     le = "categories";
     j();
-  } catch (_c2) {
-    N("Crash: " + _c2.message);
-  }
+  } catch (_c2) { N("Crash (T): " + _c2.message); }
   
-  delay(1500); 
+  delay(1000); 
   N("");
   he = !1;
   xe = !0;
@@ -127,7 +128,7 @@ function E() {
     ne = {} 
   } 
   
-  var sv = "1.0.3"; // Fallback to current known version
+  var sv = "1.0.5"; // Updated version
   var svPaths = [SV, "/storever.js", "/BruceJS/storever.js"];
   for (var i = 0; i < svPaths.length; i++) {
     try {
@@ -185,11 +186,18 @@ function O(e) {
   try { 
     if (!u()) return void (fe = !1); 
     k(e.n, "Installing"); 
-    if ("Stores" === x(e).category) { try { K.remove({ fs: Ce, path: _ST + "Guahh Store.js" }); K.remove({ fs: Ce, path: _ST + "GuahhStore.js" }); } catch(err) {} }
+    if ("Stores" === x(e).category) { 
+      try { 
+        var paths = ["/Guahh Store.js", "/GuahhStore.js", _ST + "Guahh Store.js", _ST + "GuahhStore.js"];
+        for(var pi=0; pi<paths.length; pi++) K.remove({ fs: Ce, path: paths[pi] });
+      } catch(err) {} 
+    }
     for (r = 0, s = 0, a = (n = x(e)).files || [], o = "Themes" === n.category ? Y : "IR" === n.category || "Ir" === n.category || "ir" === n.category ? _IR : "Stores" === n.category ? _ST : X, i = 0; i < a.length; i++) {
       g = l(c = a[i], o, n.category, e.n); 
       p = c && "object" == typeof c && c.source ? (n.path + c.source).replace(/^\/+/, "") : (n.path + c).replace(/^\/+/, ""); 
-      h = (H + "/" + n.owner + "/" + n.repo + "/" + n.commit + "/" + p + "?v=" + now()).replace(/ /g, "%20");       if (200 === V.httpFetch(h, { save: { fs: Ce, path: g, mode: "write" } }).status) {
+      h = (H + "/" + n.owner + "/" + n.repo + "/" + n.commit + "/" + p).replace(/ /g, "%20"); 
+      var downloadRes = V.httpFetch(h, { save: { fs: Ce, path: g, mode: "write" } });
+      if (200 === downloadRes.status || 0 === downloadRes.status) {
         k(e.n, "Downloading " + (i + 1) + " of " + a.length); 
         r++;
       } else {
